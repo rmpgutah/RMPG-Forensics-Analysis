@@ -1,0 +1,21 @@
+{
+  "name": "rmpg-forensics",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RMPG Forensics Analysis - Cross-platform mobile forensics tool",
+  "scripts": {
+    "dev:desktop": "pnpm --filter @rmpg/desktop dev",
+    "build:desktop": "pnpm --filter @rmpg/desktop build",
+    "package:win": "pnpm --filter @rmpg/desktop package:win",
+    "package:mac": "pnpm --filter @rmpg/desktop package:mac",
+    "package:linux": "pnpm --filter @rmpg/desktop package:linux",
+    "package:all": "pnpm --filter @rmpg/desktop package",
+    "dev:mobile": "pnpm --filter @rmpg/mobile start",
+    "build:shared": "pnpm --filter @rmpg/shared build",
+    "clean": "pnpm -r exec rm -rf node_modules dist"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

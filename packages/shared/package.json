@@ -1,0 +1,17 @@
+{
+  "name": "@rmpg/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0"
+  }
+}
