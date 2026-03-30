@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      content="default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https: wss:; img-src 'self' data: https:; font-src 'self' data:"
     />
     <title>RMPG Forensics Analysis</title>
   </head>
-  <body class="bg-slate-900 text-slate-100 antialiased">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>

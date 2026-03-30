@@ -23,6 +23,7 @@ import { registerFileExtractHandlers } from './file-extract-handlers';
 import { registerHashHandlers } from './hash-handlers';
 import { registerToolsHandlers } from './tools-handlers';
 import { registerSyncHandlers } from './sync-handlers';
+import { registerAuthHandlers } from './auth-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -102,4 +103,7 @@ export function registerAllIpcHandlers(): void {
 
   // Firebase cloud sync
   registerSyncHandlers();
+
+  // Authentication & 2FA
+  registerAuthHandlers();
 }

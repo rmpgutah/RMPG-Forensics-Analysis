@@ -60,7 +60,7 @@ export const OcrProcessing: React.FC = () => {
         icon={<ScanLine size={24} />}
       />
 
-      <ToolStatus tool="tesseract" label="Tesseract OCR" />
+      <ToolStatus toolName="tesseract" label="Tesseract OCR" />
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">

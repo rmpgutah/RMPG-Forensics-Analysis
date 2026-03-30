@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RMPG Forensics Analysis</string>
+    <string name="splash_subtitle">Digital Forensics Toolkit</string>
+    <string name="version_label">Version 1.0.0</string>
+
+    <!-- Bottom navigation labels -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_android">Android</string>
+    <string name="nav_whatsapp">WhatsApp</string>
+    <string name="nav_tools">Tools</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_dashboard">Dashboard tab</string>
+    <string name="cd_android">Android device analysis tab</string>
+    <string name="cd_whatsapp">WhatsApp analysis tab</string>
+    <string name="cd_tools">Forensic tools tab</string>
+    <string name="cd_settings">Application settings tab</string>
+
+    <!-- USB related -->
+    <string name="usb_device_detected">USB device detected</string>
+    <string name="usb_permission_required">USB permission required to access device</string>
+    <string name="no_usb_devices">No USB devices connected</string>
+</resources>

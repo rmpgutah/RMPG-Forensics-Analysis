@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match any USB device (for forensic device detection) -->
+    <!-- Android devices typically use these vendor/product classes -->
+    <usb-device />
+</resources>

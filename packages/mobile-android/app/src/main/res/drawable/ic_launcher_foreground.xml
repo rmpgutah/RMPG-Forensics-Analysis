@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Magnifying glass icon for forensics -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,32 C59.5,32 68,40.5 68,51 C68,55.2 66.6,59.1 64.2,62.2 L77.5,75.5 C78.7,76.7 78.7,78.6 77.5,79.8 C76.3,81 74.4,81 73.2,79.8 L59.9,66.5 C56.8,68.8 52.9,70.2 48.7,70.2 C38.2,70.2 29.7,61.7 29.7,51.2 C29.7,40.7 38.2,32.2 48.7,32.2 L49,32z M49,38 C41.8,38 36,43.8 36,51 C36,58.2 41.8,64 49,64 C56.2,64 62,58.2 62,51 C62,43.8 56.2,38 49,38z" />
+</vector>

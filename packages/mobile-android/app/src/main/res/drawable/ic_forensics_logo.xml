@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- Outer circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.2"
+        android:pathData="M60,10 C87.6,10 110,32.4 110,60 C110,87.6 87.6,110 60,110 C32.4,110 10,87.6 10,60 C10,32.4 32.4,10 60,10z" />
+
+    <!-- Inner circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.3"
+        android:pathData="M60,20 C82.1,20 100,37.9 100,60 C100,82.1 82.1,100 60,100 C37.9,100 20,82.1 20,60 C20,37.9 37.9,20 60,20z" />
+
+    <!-- Magnifying glass body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,35 C64.5,35 73,43.5 73,54 C73,58.2 71.6,62.1 69.2,65.2 L82.5,78.5 C83.7,79.7 83.7,81.6 82.5,82.8 C81.3,84 79.4,84 78.2,82.8 L64.9,69.5 C61.8,71.8 57.9,73.2 53.7,73.2 C43.2,73.2 34.7,64.7 34.7,54.2 C34.7,43.7 43.2,35.2 53.7,35.2 L54,35z M54,41 C46.8,41 41,46.8 41,54 C41,61.2 46.8,67 54,67 C61.2,67 67,61.2 67,54 C67,46.8 61.2,41 54,41z" />
+
+    <!-- Fingerprint lines inside magnifying glass -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M48,50 C48,47.8 49.8,46 52,46 L56,46 C58.2,46 60,47.8 60,50"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M46,54 C46,49.6 49.6,46 54,46 C58.4,46 62,49.6 62,54"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.5" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M50,58 C50,55.8 51.8,54 54,54 C56.2,54 58,55.8 58,58"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.5" />
+</vector>

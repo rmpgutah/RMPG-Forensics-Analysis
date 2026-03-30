@@ -12,10 +12,42 @@ import type { AdbBackupOptions } from '../services/adb-service';
  */
 export function registerAdbHandlers(): void {
   // ---------------------------------------------------------------------------
-  // ADB_LIST_DEVICES - Enumerate connected Android devices
+  // ADB_LIST_DEVICES - Enumerate connected Android + iOS devices
   // ---------------------------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.ADB_LIST_DEVICES, async () => {
-    return adbService.listDevices();
+    const android = await adbService.listDevices();
+
+    // Also detect iOS devices via libimobiledevice
+    const ios: { serial: string; model: string; manufacturer: string; product: string; version: string }[] = [];
+    try {
+      const { execFile } = require('child_process');
+      const { promisify } = require('util');
+      const execFileAsync = promisify(execFile);
+
+      const { stdout } = await execFileAsync('idevice_id', ['-l'], { timeout: 5000 });
+      const udids = stdout.trim().split(/\r?\n/).filter((s: string) => s.trim());
+
+      for (const udid of udids) {
+        try {
+          const { stdout: info } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'ProductType'], { timeout: 5000 });
+          const { stdout: nameOut } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'DeviceName'], { timeout: 5000 });
+          const { stdout: versionOut } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'ProductVersion'], { timeout: 5000 });
+          ios.push({
+            serial: udid.trim(),
+            model: nameOut.trim() || info.trim(),
+            manufacturer: 'Apple',
+            product: info.trim(),
+            version: versionOut.trim(),
+          });
+        } catch {
+          ios.push({ serial: udid.trim(), model: 'iPhone', manufacturer: 'Apple', product: '', version: '' });
+        }
+      }
+    } catch {
+      // libimobiledevice not installed or no iOS devices
+    }
+
+    return { android, ios };
   });
 
   // ---------------------------------------------------------------------------

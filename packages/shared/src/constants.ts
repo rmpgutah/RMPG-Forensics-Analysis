@@ -62,6 +62,25 @@ export const IPC_CHANNELS = {
   IOS_BACKUP: 'ios:backup',
   IOS_BACKUP_PROGRESS: 'ios:backup-progress',
   IOS_GET_INFO: 'ios:get-info',
+  IOS_FILE_EXTRACT: 'ios:file-extract',
+  IOS_FILE_EXTRACT_PROGRESS: 'ios:file-extract-progress',
+  IOS_FILE_BROWSE: 'ios:file-browse',
+  IOS_MESSAGES_EXTRACT: 'ios:messages-extract',
+  IOS_MESSAGES_EXTRACT_PROGRESS: 'ios:messages-extract-progress',
+  IOS_CALLS_EXTRACT: 'ios:calls-extract',
+  IOS_CALLS_EXTRACT_PROGRESS: 'ios:calls-extract-progress',
+  IOS_CONTACTS_EXTRACT: 'ios:contacts-extract',
+  IOS_CONTACTS_EXTRACT_PROGRESS: 'ios:contacts-extract-progress',
+  IOS_PHOTOS_EXTRACT: 'ios:photos-extract',
+  IOS_PHOTOS_EXTRACT_PROGRESS: 'ios:photos-extract-progress',
+  IOS_PHOTOS_THUMBNAILS: 'ios:photos-thumbnails',
+  IOS_APP_DATA: 'ios:app-data',
+  IOS_APP_DATA_PROGRESS: 'ios:app-data-progress',
+  IOS_APP_DATA_EXTRACT: 'ios:app-data-extract',
+  IOS_LOCATION_EXTRACT: 'ios:location-extract',
+  IOS_LOCATION_EXTRACT_PROGRESS: 'ios:location-extract-progress',
+  IOS_DELETED_RECOVER: 'ios:deleted-recover',
+  IOS_DELETED_RECOVER_PROGRESS: 'ios:deleted-recover-progress',
 
   // IPED
   IPED_RUN: 'iped:run',
@@ -126,6 +145,77 @@ export const IPC_CHANNELS = {
   // Tools
   TOOLS_CHECK: 'tools:check',
   TOOLS_CONFIGURE: 'tools:configure',
+
+  // Auth / 2FA
+  AUTH_CHECK_STATUS: 'auth:check-status',
+  AUTH_LOGIN: 'auth:login',
+  AUTH_SETUP_2FA: 'auth:setup-2fa',
+  AUTH_VERIFY_2FA: 'auth:verify-2fa',
+  AUTH_RESET_ALL_2FA: 'auth:reset-all-2fa',
+  AUTH_LOGOUT: 'auth:logout',
+  AUTH_CREATE_USER: 'auth:create-user',
+  AUTH_LIST_USERS: 'auth:list-users',
+
+  // Device Mirror
+  DEVICE_MIRROR_START: 'device:mirror-start',
+  DEVICE_MIRROR_STOP: 'device:mirror-stop',
+  DEVICE_MIRROR_STATUS: 'device:mirror-status',
+
+  // File Explorer
+  FILE_EXPLORE: 'file:explore',
+  FILE_PULL: 'file:pull',
+  FILE_PUSH: 'file:push',
+  FILE_DELETE: 'file:delete',
+
+  // Geolocation
+  GEO_EXTRACT: 'geo:extract',
+  GEO_GENERATE_KML: 'geo:generate-kml',
+
+  // Report
+  REPORT_GENERATE: 'report:generate',
+
+  // Contacts & SMS
+  CONTACTS_EXTRACT: 'contacts:extract',
+  SMS_EXTRACT: 'sms:extract',
+
+  // APK Downgrade
+  APK_DOWNGRADE: 'apk:downgrade',
+  APK_DOWNGRADE_PROGRESS: 'apk:downgrade-progress',
+
+  // Miscellaneous Collections
+  MISC_COLLECT: 'misc:collect',
+
+  // WiFi Debug
+  WIFI_PAIR: 'wifi:pair',
+  WIFI_CONNECT: 'wifi:connect',
+  WIFI_DISCONNECT: 'wifi:disconnect',
+
+  // JADX Decompiler
+  JADX_DECOMPILE: 'jadx:decompile',
+
+  // MVT Scanner
+  MVT_SCAN: 'mvt:scan',
+
+  // Image Finder
+  IMAGE_SEARCH: 'image:search',
+
+  // Multi-Device
+  MULTI_DEVICE_LIST: 'multi-device:list',
+  MULTI_DEVICE_EXECUTE: 'multi-device:execute',
+
+  // Device Reboot / PIN
+  DEVICE_REBOOT: 'device:reboot',
+  DEVICE_PIN: 'device:pin',
+
+  // SQLite Browser
+  SQLITE_OPEN: 'sqlite:open',
+  SQLITE_QUERY: 'sqlite:query',
+
+  // EXIF Viewer
+  EXIF_READ: 'exif:read',
+
+  // WhatsApp Merge
+  WHATSAPP_MERGE: 'whatsapp:merge',
 
   // App
   APP_GET_PLATFORM: 'app:get-platform',

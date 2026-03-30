@@ -35,7 +35,7 @@ export const IpedIntegration: React.FC = () => {
         icon={<Search size={24} />}
       />
 
-      <ToolStatus tool="java" label="Java Runtime" />
+      <ToolStatus toolName="java" label="Java Runtime" />
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">

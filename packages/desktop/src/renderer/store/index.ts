@@ -6,3 +6,5 @@ export type { DeviceState } from './device-store';
 
 export { useSettingsStore } from './settings-store';
 export type { SettingsState } from './settings-store';
+
+export { useAuthStore } from './auth-store';

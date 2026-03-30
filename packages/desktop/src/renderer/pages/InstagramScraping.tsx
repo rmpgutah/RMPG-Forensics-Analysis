@@ -68,7 +68,7 @@ export const InstagramScraping: React.FC = () => {
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
-          <ToolStatus tool="instaloader" />
+          <ToolStatus toolName="instaloader" />
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-300">

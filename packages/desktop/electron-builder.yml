@@ -13,12 +13,11 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: resources/icons/icon.ico
+  sign: false
+  signDlls: false
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: resources/icons/icon.ico
-  uninstallerIcon: resources/icons/icon.ico
   artifactName: RMPG-Forensics-Analysis-${version}-Setup.${ext}
 mac:
   target:

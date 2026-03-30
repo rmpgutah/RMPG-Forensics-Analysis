@@ -1,0 +1,20 @@
+extends: electron-builder.yml
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  icon: resources/icons/icon.icns
+  category: public.app-category.utilities
+  hardenedRuntime: false
+  identity: null
+  artifactName: RMPG-Forensics-Analysis-${version}-${arch}.${ext}
+dmg:
+  sign: false
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications

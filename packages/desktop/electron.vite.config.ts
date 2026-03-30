@@ -4,15 +4,25 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({
+      exclude: ['@rmpg/shared', 'firebase'],
+    })],
     resolve: {
       alias: {
         '@main': resolve('src/main'),
+        '@rmpg/shared': resolve('../shared/src'),
       },
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({
+      exclude: ['@rmpg/shared'],
+    })],
+    resolve: {
+      alias: {
+        '@rmpg/shared': resolve('../shared/src'),
+      },
+    },
   },
   renderer: {
     resolve: {

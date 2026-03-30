@@ -17,7 +17,12 @@ export function registerToolsHandlers(): void {
   // ---------------------------------------------------------------------------
   // TOOLS_CHECK - Resolve all known tools and return their status
   // ---------------------------------------------------------------------------
-  ipcMain.handle(IPC_CHANNELS.TOOLS_CHECK, async () => {
+  ipcMain.handle(IPC_CHANNELS.TOOLS_CHECK, async (_event, toolName?: ToolName) => {
+    if (toolName) {
+      // Single tool lookup
+      const { resolveTool } = require('../services/tool-resolver');
+      return resolveTool(toolName);
+    }
     return resolveAllTools();
   });
 

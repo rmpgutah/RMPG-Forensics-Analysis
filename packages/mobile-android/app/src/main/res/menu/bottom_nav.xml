@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_dashboard"
+        android:icon="@drawable/ic_dashboard"
+        android:title="@string/nav_dashboard"
+        android:contentDescription="@string/cd_dashboard" />
+
+    <item
+        android:id="@+id/nav_android"
+        android:icon="@drawable/ic_android"
+        android:title="@string/nav_android"
+        android:contentDescription="@string/cd_android" />
+
+    <item
+        android:id="@+id/nav_whatsapp"
+        android:icon="@drawable/ic_whatsapp"
+        android:title="@string/nav_whatsapp"
+        android:contentDescription="@string/cd_whatsapp" />
+
+    <item
+        android:id="@+id/nav_tools"
+        android:icon="@drawable/ic_tools"
+        android:title="@string/nav_tools"
+        android:contentDescription="@string/cd_tools" />
+
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="@string/nav_settings"
+        android:contentDescription="@string/cd_settings" />
+
+</menu>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand color: CornflowerBlue -->
+    <color name="cornflower_blue">#6495ED</color>
+    <color name="cornflower_blue_dark">#4A76D4</color>
+    <color name="cornflower_blue_light">#8FB3F5</color>
+    <color name="cornflower_blue_variant">#3D6BC7</color>
+
+    <!-- Material 3 seed and key colors -->
+    <color name="md_theme_primary">#6495ED</color>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#D6E3FF</color>
+    <color name="md_theme_onPrimaryContainer">#001B3E</color>
+
+    <color name="md_theme_secondary">#565E71</color>
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#DAE2F9</color>
+    <color name="md_theme_onSecondaryContainer">#131C2B</color>
+
+    <color name="md_theme_tertiary">#6F5575</color>
+    <color name="md_theme_onTertiary">#FFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#F9D8FE</color>
+    <color name="md_theme_onTertiaryContainer">#28132F</color>
+
+    <color name="md_theme_error">#BA1A1A</color>
+    <color name="md_theme_onError">#FFFFFF</color>
+    <color name="md_theme_errorContainer">#FFDAD6</color>
+    <color name="md_theme_onErrorContainer">#410002</color>
+
+    <color name="md_theme_background">#F9F9FF</color>
+    <color name="md_theme_onBackground">#1A1B20</color>
+    <color name="md_theme_surface">#F9F9FF</color>
+    <color name="md_theme_onSurface">#1A1B20</color>
+    <color name="md_theme_surfaceVariant">#E0E2EC</color>
+    <color name="md_theme_onSurfaceVariant">#44474E</color>
+
+    <color name="md_theme_outline">#74777F</color>
+    <color name="md_theme_outlineVariant">#C4C6D0</color>
+
+    <!-- Dark theme colors -->
+    <color name="md_theme_dark_primary">#AAC7FF</color>
+    <color name="md_theme_dark_onPrimary">#0A305F</color>
+    <color name="md_theme_dark_primaryContainer">#284777</color>
+    <color name="md_theme_dark_onPrimaryContainer">#D6E3FF</color>
+
+    <color name="md_theme_dark_secondary">#BEC6DC</color>
+    <color name="md_theme_dark_onSecondary">#283041</color>
+    <color name="md_theme_dark_secondaryContainer">#3E4759</color>
+    <color name="md_theme_dark_onSecondaryContainer">#DAE2F9</color>
+
+    <color name="md_theme_dark_background">#121318</color>
+    <color name="md_theme_dark_onBackground">#E2E2E9</color>
+    <color name="md_theme_dark_surface">#121318</color>
+    <color name="md_theme_dark_onSurface">#E2E2E9</color>
+    <color name="md_theme_dark_surfaceVariant">#44474E</color>
+    <color name="md_theme_dark_onSurfaceVariant">#C4C6D0</color>
+
+    <color name="md_theme_dark_error">#FFB4AB</color>
+    <color name="md_theme_dark_onError">#690005</color>
+
+    <!-- Semantic aliases -->
+    <color name="background">@color/md_theme_background</color>
+    <color name="surface">@color/md_theme_surface</color>
+    <color name="on_surface">@color/md_theme_onSurface</color>
+
+    <!-- Bottom navigation colors -->
+    <color name="bottom_nav_active">#6495ED</color>
+    <color name="bottom_nav_inactive">#74777F</color>
+
+    <!-- Status bar -->
+    <color name="status_bar">#4A76D4</color>
+</resources>

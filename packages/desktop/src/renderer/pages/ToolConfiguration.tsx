@@ -84,7 +84,7 @@ export const ToolConfiguration: React.FC = () => {
               className="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/50 p-4"
             >
               <div className="flex items-center gap-4">
-                <ToolStatus tool={tool.id} />
+                <ToolStatus toolName={tool.id} label={tool.name} />
                 <div>
                   <h4 className="text-sm font-medium text-white">{tool.name}</h4>
                   <p className="text-xs text-slate-400">{tool.description}</p>

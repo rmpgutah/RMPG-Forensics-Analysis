@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard,
   FolderPlus,
   FolderOpen,
   Smartphone,
   Apple,
   CheckCircle,
-  XCircle,
   Clock,
   Shield,
 } from 'lucide-react';
@@ -58,91 +56,95 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={APP_NAME}
-        description="Digital forensics acquisition and analysis toolkit"
-        icon={<Shield size={28} />}
-      />
+      {/* Hero header */}
+      <div className="card rounded-xl bg-gradient-to-br from-[#1a2a3a] to-[#0d3b5e] p-8 text-center" style={{ border: 'none' }}>
+        <div className="mb-3 flex items-center justify-center gap-3">
+          <div className="rounded-xl bg-white/10 p-3">
+            <Shield size={32} className="text-[#6495ED]" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold text-white">
+          <span className="text-white">RMPG</span>{' '}
+          <span className="text-red-400">FORENSICS</span>
+        </h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>Digital Forensics Acquisition & Analysis Toolkit</p>
+      </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
         <button
           onClick={handleCreateCase}
-          className="flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-5 text-left transition hover:border-blue-600 hover:bg-slate-800"
+          className="card flex flex-col items-center gap-3 p-8 text-center transition hover:border-[#6495ED]"
         >
-          <div className="rounded-lg bg-blue-600/20 p-3">
-            <FolderPlus size={24} className="text-blue-400" />
+          <div className="rounded-xl bg-[#6495ED]/15 p-4">
+            <FolderPlus size={32} className="text-[#6495ED]" />
           </div>
           <div>
-            <h3 className="font-semibold text-white">Create New Case</h3>
-            <p className="text-sm text-slate-400">Start a new forensic case</p>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>NEW CASE</h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Start a new forensic case</p>
           </div>
         </button>
 
         <button
           onClick={handleOpenCase}
-          className="flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-5 text-left transition hover:border-blue-600 hover:bg-slate-800"
+          className="card flex flex-col items-center gap-3 p-8 text-center transition hover:border-green-500"
         >
-          <div className="rounded-lg bg-green-600/20 p-3">
-            <FolderOpen size={24} className="text-green-400" />
+          <div className="rounded-xl p-4" style={{ background: 'rgba(34,197,94,0.1)' }}>
+            <FolderOpen size={32} className="text-green-400" />
           </div>
           <div>
-            <h3 className="font-semibold text-white">Open Existing Case</h3>
-            <p className="text-sm text-slate-400">Resume work on a case</p>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>LOAD EXISTING</h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Resume work on a case</p>
           </div>
         </button>
       </div>
 
       {/* Device Status */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">
+        <div className="card">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Smartphone size={18} className="text-green-400" />
-              <h3 className="font-semibold text-white">Android Devices</h3>
+              <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Android Devices</h3>
             </div>
-            <span className="rounded-full bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-300">
-              {androidDevices.length}
-            </span>
+            <span className="badge-info">{androidDevices.length}</span>
           </div>
           {androidDevices.length === 0 ? (
-            <p className="text-sm text-slate-500">No Android devices connected</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No Android devices connected</p>
           ) : (
             <ul className="space-y-2">
               {androidDevices.map((d) => (
                 <li key={d.serial} className="flex items-center gap-2 text-sm">
                   <CheckCircle size={12} className="text-green-400" />
-                  <span className="text-slate-300">
+                  <span style={{ color: 'var(--text-primary)' }}>
                     {d.manufacturer} {d.model}
                   </span>
-                  <span className="text-xs text-slate-500">({d.serial})</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({d.serial})</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">
+        <div className="card">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Apple size={18} className="text-blue-400" />
-              <h3 className="font-semibold text-white">iOS Devices</h3>
+              <Apple size={18} className="text-[#6495ED]" />
+              <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>iOS Devices</h3>
             </div>
-            <span className="rounded-full bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-300">
-              {iosDevices.length}
-            </span>
+            <span className="badge-info">{iosDevices.length}</span>
           </div>
           {iosDevices.length === 0 ? (
-            <p className="text-sm text-slate-500">No iOS devices connected</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No iOS devices connected</p>
           ) : (
             <ul className="space-y-2">
               {iosDevices.map((d) => (
                 <li key={d.serial} className="flex items-center gap-2 text-sm">
-                  <CheckCircle size={12} className="text-blue-400" />
-                  <span className="text-slate-300">
+                  <CheckCircle size={12} className="text-[#6495ED]" />
+                  <span style={{ color: 'var(--text-primary)' }}>
                     {d.manufacturer} {d.model}
                   </span>
-                  <span className="text-xs text-slate-500">({d.serial})</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>({d.serial})</span>
                 </li>
               ))}
             </ul>
@@ -151,36 +153,36 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Recent Cases */}
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">
-        <h3 className="mb-3 flex items-center gap-2 font-semibold text-white">
-          <Clock size={18} className="text-slate-400" />
+      <div className="card">
+        <h3 className="mb-3 flex items-center gap-2 font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <Clock size={18} style={{ color: 'var(--text-muted)' }} />
           Recent Cases
         </h3>
         {recentCases.length === 0 ? (
-          <p className="text-sm text-slate-500">No recent cases</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No recent cases</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="data-table w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700 text-left text-xs text-slate-500">
-                <th className="pb-2 font-medium">Case Name</th>
-                <th className="pb-2 font-medium">Number</th>
-                <th className="pb-2 font-medium">Created</th>
-                <th className="pb-2 font-medium">Path</th>
+              <tr>
+                <th>Case Name</th>
+                <th>Number</th>
+                <th>Created</th>
+                <th>Path</th>
               </tr>
             </thead>
             <tbody>
               {recentCases.map((c, i) => (
                 <tr
                   key={i}
-                  className="border-b border-slate-700/50 transition hover:bg-slate-700/30 cursor-pointer"
+                  className="cursor-pointer"
                   onClick={() => window.api.invoke(IPC_CHANNELS.CASE_SET_PATH, c.path)}
                 >
-                  <td className="py-2 text-slate-300">{c.name}</td>
-                  <td className="py-2 text-slate-400">{c.caseNumber || '-'}</td>
-                  <td className="py-2 text-slate-400">
+                  <td>{c.name}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{c.caseNumber || '-'}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>
                     {new Date(c.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="max-w-[200px] truncate py-2 text-xs text-slate-500">
+                  <td className="max-w-[200px] truncate text-xs" style={{ color: 'var(--text-muted)' }}>
                     {c.path}
                   </td>
                 </tr>
@@ -191,8 +193,8 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Tool Status */}
-      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">
-        <h3 className="mb-3 font-semibold text-white">Tool Status</h3>
+      <div className="card">
+        <h3 className="mb-3 font-semibold" style={{ color: 'var(--text-primary)' }}>Tool Status</h3>
         <div className="grid grid-cols-3 gap-3">
           {QUICK_TOOLS.map((t) => (
             <ToolStatus key={t.tool} toolName={t.tool} label={t.name} />
