@@ -86,8 +86,18 @@ function getBinaryName(toolName: ToolName): string {
   return isWindows() ? TOOL_BINARIES[toolName].win32 : TOOL_BINARIES[toolName].posix;
 }
 
+/** Common tool directories to check when PATH doesn't include them (macOS packaged apps) */
+const EXTRA_SEARCH_DIRS = [
+  '/opt/homebrew/bin',
+  '/opt/homebrew/sbin',
+  '/usr/local/bin',
+  '/usr/bin',
+  '/bin',
+];
+
 /**
  * Attempt to find the tool on the system PATH using `which` (posix) or `where` (windows).
+ * Falls back to checking common directories directly.
  */
 async function findOnPath(binaryName: string): Promise<string | null> {
   const cmd = isWindows() ? 'where' : 'which';
@@ -100,8 +110,19 @@ async function findOnPath(binaryName: string): Promise<string | null> {
       }
     }
   } catch {
-    // Tool not found on PATH
+    // Tool not found via which/where
   }
+
+  // Fallback: check common directories directly (for packaged macOS apps)
+  if (!isWindows()) {
+    for (const dir of EXTRA_SEARCH_DIRS) {
+      const candidate = path.join(dir, binaryName);
+      if (await fileExists(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
   return null;
 }
 
