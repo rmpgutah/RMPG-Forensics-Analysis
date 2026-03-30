@@ -24,6 +24,7 @@ import { registerHashHandlers } from './hash-handlers';
 import { registerToolsHandlers } from './tools-handlers';
 import { registerSyncHandlers } from './sync-handlers';
 import { registerAuthHandlers } from './auth-handlers';
+import { registerMissingHandlers } from './missing-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -106,4 +107,7 @@ export function registerAllIpcHandlers(): void {
 
   // Authentication & 2FA
   registerAuthHandlers();
+
+  // Stub handlers for features not yet fully implemented
+  registerMissingHandlers();
 }

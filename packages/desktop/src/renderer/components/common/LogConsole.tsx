@@ -61,7 +61,8 @@ export const LogConsole: React.FC<LogConsoleProps> = ({
           <span className="text-slate-600">Waiting for output...</span>
         ) : (
           logs.map((entry, idx) => {
-            const time = new Date(entry.timestamp).toLocaleTimeString();
+            const d = new Date(entry.timestamp);
+            const time = isNaN(d.getTime()) ? new Date().toLocaleTimeString() : d.toLocaleTimeString();
             return (
               <div key={idx} className="whitespace-pre-wrap">
                 <span className="text-slate-600">[{time}]</span>{' '}

@@ -21,13 +21,20 @@ export function registerOcrHandlers(): void {
     async (
       _event,
       options: {
-        inputPaths: string[];
-        outputDir: string;
+        inputPaths?: string[];
+        filePath?: string;
+        outputDir?: string;
         language?: string;
         psm?: number;
       }
     ) => {
-      const { inputPaths, outputDir, language = 'eng', psm = 3 } = options;
+      const inputPaths = options.inputPaths || (options.filePath ? [options.filePath] : []);
+      const outputDir = options.outputDir || path.dirname(inputPaths[0] || '/tmp');
+      const { language = 'eng', psm = 3 } = options;
+
+      if (inputPaths.length === 0) {
+        throw new Error('No input file specified');
+      }
       const win = BrowserWindow.getFocusedWindow();
 
       const sendProgress = (message: string): void => {
