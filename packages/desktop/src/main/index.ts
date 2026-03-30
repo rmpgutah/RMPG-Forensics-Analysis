@@ -1,7 +1,19 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'path';
+import { execFileSync } from 'child_process';
 import { is } from '@electron-toolkit/utils';
 import { registerAllIpcHandlers } from './ipc';
+
+// Fix PATH for macOS — packaged Electron apps don't inherit shell PATH
+if (process.platform === 'darwin') {
+  try {
+    const shellPath = execFileSync('/bin/zsh', ['-ilc', 'echo $PATH'], { encoding: 'utf-8' }).trim();
+    if (shellPath) process.env.PATH = shellPath;
+  } catch {
+    const extra = '/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin';
+    process.env.PATH = `${extra}:${process.env.PATH || ''}`;
+  }
+}
 
 let mainWindow: BrowserWindow | null = null;
 
