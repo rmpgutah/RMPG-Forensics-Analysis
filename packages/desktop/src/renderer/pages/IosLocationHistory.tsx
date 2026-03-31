@@ -9,7 +9,7 @@ import {
   Download,
   Loader2,
   Search,
-  Map,
+  Map as MapIcon,
   Calendar,
   FileDown,
   Clock,
@@ -21,7 +21,8 @@ import {
   Eye,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -65,7 +66,7 @@ type ExportFormat = 'kml' | 'csv';
 /* ------------------------------------------------------------------ */
 
 export const IosLocationHistory: React.FC = () => {
-  const [backupPath, setBackupPath] = useState('');
+  const [backupDir, setBackupDir] = useState('');
   const [locations, setLocations] = useState<LocationRecord[]>([]);
   const [filteredLocations, setFilteredLocations] = useState<LocationRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,21 +82,14 @@ export const IosLocationHistory: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<LocationRecord | null>(null);
   const pageSize = 50;
 
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, { title: 'Select iOS Backup Folder' });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
-
   const handleExtract = async () => {
-    if (!backupPath) return;
+    if (!backupDir) return;
     setLoading(true);
     setLocations([]);
     setStats(null);
     try {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_LOCATION_EXTRACT, {
-        backupPath,
+        backupDir,
         includeAll: true,
       }) as { locations: LocationRecord[]; stats: LocationStats };
       setLocations(result.locations);
@@ -117,7 +111,7 @@ export const IosLocationHistory: React.FC = () => {
       });
       if (savePath) {
         await window.api.invoke(IPC_CHANNELS.IOS_LOCATION_EXTRACT, {
-          backupPath,
+          backupDir,
           exportPath: savePath,
           exportFormat: format,
           locationIds: filteredLocations.map((l) => l.id),
@@ -221,18 +215,18 @@ export const IosLocationHistory: React.FC = () => {
 
       {/* Source */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>iOS Backup Source</label>
-            <div className="flex gap-2">
-              <input type="text" value={backupPath} readOnly placeholder="Select iOS backup folder..." className="input-field flex-1" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading}>Browse</button>
-            </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupDir={backupDir}
+            onBackupPath={setBackupDir}
+            disabled={loading}
+          />
+          <div className="flex justify-end">
+            <button onClick={handleExtract} className="btn-primary" disabled={!backupDir || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Extracting...' : 'Extract Location Data'}
+            </button>
           </div>
-          <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <MapPin size={16} className="mr-2" />}
-            {loading ? 'Extracting...' : 'Extract Location Data'}
-          </button>
         </div>
       </div>
 
@@ -333,7 +327,7 @@ export const IosLocationHistory: React.FC = () => {
       {(viewMode === 'map' || viewMode === 'heatmap') && filteredLocations.length > 0 && (
         <div className="card p-6" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', minHeight: '400px' }}>
           <div className="text-center">
-            <Map size={64} className="mx-auto mb-4 text-cyan-400" />
+            <MapIcon size={64} className="mx-auto mb-4 text-cyan-400" />
             <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
               {viewMode === 'heatmap' ? 'Location Heatmap' : 'Location Map'}
             </h3>
@@ -347,7 +341,7 @@ export const IosLocationHistory: React.FC = () => {
                     {getSourceIcon(loc.source)}
                     <span style={{ color: 'var(--text-primary)' }}>{loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}</span>
                   </div>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(loc.timestamp).toLocaleDateString()}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtDate(loc.timestamp)}</span>
                 </div>
               ))}
             </div>
@@ -393,8 +387,8 @@ export const IosLocationHistory: React.FC = () => {
                       {loc.latitude.toFixed(5)}, {loc.longitude.toFixed(5)}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(loc.timestamp).toLocaleDateString()}{' '}
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(loc.timestamp).toLocaleTimeString()}</span>
+                      {fmtDate(loc.timestamp)}{' '}
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtTime(loc.timestamp)}</span>
                     </td>
                     <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
                       {loc.duration > 0 ? formatDuration(loc.duration) : '—'}
@@ -436,7 +430,7 @@ export const IosLocationHistory: React.FC = () => {
                 { label: 'Coordinates', value: `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}` },
                 { label: 'Altitude', value: selectedLocation.altitude ? `${selectedLocation.altitude.toFixed(1)}m` : 'N/A' },
                 { label: 'Accuracy', value: `±${selectedLocation.accuracy}m` },
-                { label: 'Timestamp', value: new Date(selectedLocation.timestamp).toLocaleString() },
+                { label: 'Timestamp', value: fmtDateTime(selectedLocation.timestamp) },
                 { label: 'Duration', value: selectedLocation.duration > 0 ? formatDuration(selectedLocation.duration) : 'N/A' },
                 { label: 'Confidence', value: `${selectedLocation.confidence}%` },
                 ...(selectedLocation.ssid ? [{ label: 'WiFi SSID', value: selectedLocation.ssid }] : []),
