@@ -1,6 +1,6 @@
 {
   "name": "@rmpg/desktop",
-  "version": "1.0.0",
+  "version": "1.0.9",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -19,6 +19,7 @@
     "better-sqlite3": "^11.0.0",
     "electron-updater": "^6.1.0",
     "firebase": "^10.14.1",
+    "plist": "^3.1.0",
     "qrcode": "^1.5.4",
     "uuid": "^9.0.0"
   },
@@ -26,6 +27,7 @@
     "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
     "@types/better-sqlite3": "^7.6.0",
+    "@types/plist": "^3.0.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^9.0.0",

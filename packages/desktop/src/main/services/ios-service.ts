@@ -986,3 +986,265 @@ export async function extractBackupFile(
   await fs.copyFile(sourcePath, destPath);
   return { success: true, outputPath: destPath };
 }
+
+// ---------------------------------------------------------------------------
+// Activity timeline, location access logs, and network trace
+// ---------------------------------------------------------------------------
+
+export interface TimelineEvent {
+  id: string;
+  type: 'message' | 'call' | 'location' | 'browse' | 'note' | 'photo' | 'voicemail';
+  timestamp: number; // Unix ms
+  summary: string;
+  source: string;
+  detail?: Record<string, unknown>;
+}
+
+/**
+ * Aggregates data from existing extractors into a unified chronological event
+ * list sorted newest-first.
+ */
+export async function extractActivityTimeline(
+  backupDir: string
+): Promise<{ events: TimelineEvent[]; total: number; error?: string }> {
+  const results = await Promise.allSettled([
+    extractMessages(backupDir),
+    extractCallHistory(backupDir),
+    extractLocationHistory(backupDir),
+    extractSafariHistory(backupDir),
+    extractNotes(backupDir),
+  ]);
+
+  const events: TimelineEvent[] = [];
+
+  // Messages — returns { messages: unknown[] }
+  // date is already an ISO string after normalization
+  if (results[0].status === 'fulfilled') {
+    const val = results[0].value as Record<string, unknown>;
+    const messages = (val.messages ?? []) as unknown[];
+    for (const msg of messages) {
+      const m = msg as Record<string, unknown>;
+      const ts = typeof m.date === 'string' ? Date.parse(m.date as string) : 0;
+      const senderLabel =
+        m.is_from_me === 1
+          ? 'Me'
+          : (typeof m.contact_id === 'string' && m.contact_id ? m.contact_id : 'Contact');
+      events.push({
+        id: `msg-${m.id ?? Math.random()}`,
+        type: 'message',
+        timestamp: ts,
+        summary: `${senderLabel}: ${String(m.text ?? '').substring(0, 80)}`,
+        source: 'Messages',
+        detail: m,
+      });
+    }
+  }
+
+  // Calls — returns { calls: unknown[] }
+  // date is already an ISO string after normalization; address field is phone_number
+  if (results[1].status === 'fulfilled') {
+    const val = results[1].value as Record<string, unknown>;
+    const calls = (val.calls ?? []) as unknown[];
+    for (const call of calls) {
+      const c = call as Record<string, unknown>;
+      const ts = typeof c.date === 'string' ? Date.parse(c.date as string) : 0;
+      events.push({
+        id: `call-${c.id ?? Math.random()}`,
+        type: 'call',
+        timestamp: ts,
+        summary: `${c.answered === 1 ? 'Call' : 'Missed'} ${c.duration ? `(${c.duration}s)` : ''} — ${c.phone_number ?? 'Unknown'}`,
+        source: 'Call History',
+        detail: c,
+      });
+    }
+  }
+
+  // Locations — returns { locations: unknown[] }
+  // timestamp is already Unix ms (a number)
+  if (results[2].status === 'fulfilled') {
+    const val = results[2].value as Record<string, unknown>;
+    const locs = (val.locations ?? []) as unknown[];
+    for (const loc of locs) {
+      const l = loc as Record<string, unknown>;
+      events.push({
+        id: `loc-${Math.random()}`,
+        type: 'location',
+        timestamp: typeof l.timestamp === 'number' ? l.timestamp : 0,
+        summary: `Location: ${Number(l.latitude ?? 0).toFixed(5)}, ${Number(l.longitude ?? 0).toFixed(5)}`,
+        source: 'Location History',
+        detail: l,
+      });
+    }
+  }
+
+  // Safari — returns { history: unknown[] }
+  // visit_time is already an ISO string after normalization
+  if (results[3].status === 'fulfilled') {
+    const val = results[3].value as Record<string, unknown>;
+    const hist = (val.history ?? []) as unknown[];
+    for (const visit of hist) {
+      const v = visit as Record<string, unknown>;
+      const ts = typeof v.visit_time === 'string' ? Date.parse(v.visit_time as string) : 0;
+      events.push({
+        id: `safari-${Math.random()}`,
+        type: 'browse',
+        timestamp: ts,
+        summary: `Visited: ${String(v.title ?? v.url ?? 'Unknown').substring(0, 80)}`,
+        source: 'Safari',
+        detail: v,
+      });
+    }
+  }
+
+  // Notes — returns { notes: unknown[] }
+  // created/modified are ISO strings; fields are title and snippet
+  if (results[4].status === 'fulfilled') {
+    const val = results[4].value as Record<string, unknown>;
+    const notes = (val.notes ?? []) as unknown[];
+    for (const note of notes) {
+      const n = note as Record<string, unknown>;
+      const ts = typeof n.created === 'string' ? Date.parse(n.created as string) : 0;
+      events.push({
+        id: `note-${Math.random()}`,
+        type: 'note',
+        timestamp: ts,
+        summary: `Note: ${String(n.title ?? n.snippet ?? '').substring(0, 80)}`,
+        source: 'Notes',
+        detail: n,
+      });
+    }
+  }
+
+  events.sort((a, b) => b.timestamp - a.timestamp);
+  return { events, total: events.length };
+}
+
+export interface LocationAccessEntry {
+  bundleId: string;
+  lastAccessTime: number; // Unix ms
+  authorizationType: string;
+  accessCount: number;
+  executable?: string;
+}
+
+/**
+ * Parses HomeDomain/Library/Caches/locationd/clients.plist which records
+ * every app's location authorization status and last access time.
+ */
+export async function extractLocationAccessLogs(
+  backupDir: string
+): Promise<{ entries: LocationAccessEntry[]; total: number; error?: string }> {
+  const plistPath = await findBackupFile(
+    backupDir,
+    'HomeDomain',
+    'Library/Caches/locationd/clients.plist'
+  );
+
+  if (!plistPath) {
+    return { entries: [], total: 0, error: 'clients.plist not found in backup' };
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const plist = require('plist');
+    const rawBuffer = await fs.readFile(plistPath);
+    // plist.parse needs a string; binary plists need latin1 encoding
+    const rawStr = rawBuffer.toString('binary');
+    const parsed = plist.parse(rawStr) as Record<string, unknown>;
+
+    const entries: LocationAccessEntry[] = [];
+    const authMap: Record<number, string> = {
+      0: 'NotDetermined', 1: 'Restricted', 2: 'Denied', 3: 'Always', 4: 'WhenInUse',
+    };
+
+    for (const [bundleId, data] of Object.entries(parsed)) {
+      if (typeof data !== 'object' || data === null) continue;
+      const d = data as Record<string, unknown>;
+      const authStatus = Number(
+        d['Authorized'] ?? d['kCLClientManagerStateAuthorizationStatus'] ?? 0
+      );
+      const lastUsed = d['LastTimeUsed'] ?? d['lastUsed'];
+      entries.push({
+        bundleId,
+        lastAccessTime: typeof lastUsed === 'number'
+          ? (lastUsed + 978307200) * 1000
+          : 0,
+        authorizationType: authMap[authStatus] ?? `Status${authStatus}`,
+        accessCount: Number(d['TimesInterrupted'] ?? d['accessCount'] ?? 0),
+        executable: typeof d['BundlePath'] === 'string' ? String(d['BundlePath']) : undefined,
+      });
+    }
+
+    entries.sort((a, b) => b.lastAccessTime - a.lastAccessTime);
+    return { entries, total: entries.length };
+  } catch (err) {
+    return { entries: [], total: 0, error: (err as Error).message };
+  }
+}
+
+export interface NetworkEntry {
+  ssid: string;
+  bssid?: string;
+  securityType?: string;
+  lastJoined?: number; // Unix ms
+  joinCount?: number;
+}
+
+/**
+ * Parses SystemPreferencesDomain/SystemConfiguration/com.apple.wifi.plist
+ * for known WiFi networks joined by the device.
+ */
+export async function extractNetworkTrace(
+  backupDir: string
+): Promise<{ networks: NetworkEntry[]; total: number; error?: string }> {
+  const networks: NetworkEntry[] = [];
+
+  const wifiPlistPath = await findBackupFile(
+    backupDir,
+    'SystemPreferencesDomain',
+    'SystemConfiguration/com.apple.wifi.plist'
+  );
+
+  if (!wifiPlistPath) {
+    return { networks: [], total: 0, error: 'com.apple.wifi.plist not found in backup' };
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const plist = require('plist');
+    const rawBuffer = await fs.readFile(wifiPlistPath);
+    const rawStr = rawBuffer.toString('binary');
+    const parsed = plist.parse(rawStr) as Record<string, unknown>;
+
+    const knownNetworks = parsed['List of known networks'] as unknown[] | undefined;
+    if (Array.isArray(knownNetworks)) {
+      for (const net of knownNetworks) {
+        const n = net as Record<string, unknown>;
+        const ssid = String(n['SSID_STR'] ?? n['SSID'] ?? 'Unknown');
+        const lastJoined = n['lastJoined'];
+        networks.push({
+          ssid,
+          bssid: typeof n['BSSID'] === 'string' ? String(n['BSSID']) : undefined,
+          securityType: typeof n['SecurityType'] === 'string' ? String(n['SecurityType']) : undefined,
+          lastJoined: typeof lastJoined === 'number'
+            ? (lastJoined + 978307200) * 1000
+            : undefined,
+          joinCount: typeof n['joinCount'] === 'number' ? Number(n['joinCount']) : undefined,
+        });
+      }
+    }
+
+    // Deduplicate by SSID
+    const seen = new Set<string>();
+    const deduped = networks.filter(n => {
+      if (seen.has(n.ssid)) return false;
+      seen.add(n.ssid);
+      return true;
+    });
+
+    deduped.sort((a, b) => (b.lastJoined ?? 0) - (a.lastJoined ?? 0));
+    return { networks: deduped, total: deduped.length };
+  } catch (err) {
+    return { networks: [], total: 0, error: (err as Error).message };
+  }
+}

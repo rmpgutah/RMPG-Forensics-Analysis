@@ -25,6 +25,9 @@ importers:
       firebase:
         specifier: ^10.14.1
         version: 10.14.1
+      plist:
+        specifier: ^3.1.0
+        version: 3.1.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -41,6 +44,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.0
         version: 7.6.13
+      '@types/plist':
+        specifier: ^3.0.5
+        version: 3.0.5
       '@types/react':
         specifier: ^18.3.0
         version: 18.3.28
@@ -886,6 +892,7 @@ packages:
   '@xmldom/xmldom@0.8.11':
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
@@ -3277,7 +3284,6 @@ snapshots:
     dependencies:
       '@types/node': 25.5.0
       xmlbuilder: 15.1.1
-    optional: true
 
   '@types/prop-types@15.7.15': {}
 
