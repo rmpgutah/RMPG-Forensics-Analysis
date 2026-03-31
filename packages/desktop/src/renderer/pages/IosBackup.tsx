@@ -87,7 +87,7 @@ export const IosBackup: React.FC = () => {
   };
 
   return (
-    <PlatformGuard requiredTools={['idevicebackup2']}>
+    <PlatformGuard allowed={['darwin', 'linux']}>
       <div className="space-y-6">
         <PageHeader
           title="iOS Backup"
