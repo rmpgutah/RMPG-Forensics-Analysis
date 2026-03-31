@@ -180,7 +180,10 @@ export function registerIosHandlers(): void {
         if (result.exitCode === 0 || backupExists) {
           return { success: true, backupPath: backupExists ? backupDir : outputPath };
         } else {
-          const errMsg = result.stderr?.trim() || result.stdout?.trim() || 'Backup failed';
+          const detail = result.stderr?.trim() || result.stdout?.trim();
+          const errMsg = detail
+            ? detail
+            : `idevicebackup2 exited with code ${result.exitCode}. Check that the device is unlocked and has trusted this computer.`;
           return { success: false, error: errMsg };
         }
       } catch (err) {

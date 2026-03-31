@@ -184,10 +184,11 @@ export async function backup(
   onProgress?: (p: ProcessProgress) => void
 ): Promise<ProcessResult> {
   const idevicebackup2Path = await getToolPath('idevicebackup2');
-  const args: string[] = ['-u', udid];
-  if (encrypted) args.push('encryption', 'on');
-  args.push('backup', '--full', outputPath);
 
+  // idevicebackup2 fails silently if the output directory does not exist
+  await fs.mkdir(outputPath, { recursive: true });
+
+  const args: string[] = ['-u', udid, 'backup', '--full', outputPath];
   if (onProgress) return runCommandWithProgress(idevicebackup2Path, args, {}, onProgress);
   return runCommand(idevicebackup2Path, args);
 }
