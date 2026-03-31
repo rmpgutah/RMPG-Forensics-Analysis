@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Apple, Play, Loader2, Info } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Apple, Play, Loader2, Info, CheckCircle2 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import {
   PageHeader,
@@ -27,6 +27,32 @@ export const IosBackup: React.FC = () => {
   const [password, setPassword] = useState('');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfoResult | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
+  const [phase, setPhase] = useState(1);
+  const [phaseLabel, setPhaseLabel] = useState('');
+  const [outputPath, setOutputPath] = useState('');
+  const [lastProgressTime, setLastProgressTime] = useState(0);
+  const [isStalled, setIsStalled] = useState(false);
+
+  useEffect(() => {
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_BACKUP_PROGRESS, (data: Record<string, unknown>) => {
+      if (typeof data.phase === 'number') setPhase(data.phase as number);
+      if (typeof data.phaseLabel === 'string') setPhaseLabel(data.phaseLabel as string);
+      if (typeof data.outputPath === 'string' && data.outputPath) setOutputPath(data.outputPath as string);
+      setLastProgressTime(Date.now());
+    });
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    if (!process.isRunning) {
+      setIsStalled(false);
+      return;
+    }
+    const interval = setInterval(() => {
+      setIsStalled(Date.now() - lastProgressTime > 3000);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [process.isRunning, lastProgressTime]);
 
   const handleGetInfo = async () => {
     if (!selectedDevice) return;
@@ -47,6 +73,11 @@ export const IosBackup: React.FC = () => {
 
   const handleStartBackup = async () => {
     if (!selectedDevice || !outputFolder) return;
+    setPhase(1);
+    setPhaseLabel('Connecting to device…');
+    setOutputPath('');
+    setLastProgressTime(Date.now());
+    setIsStalled(false);
     await process.start({
       udid: selectedDevice.serial,
       outputPath: outputFolder,
@@ -78,7 +109,7 @@ export const IosBackup: React.FC = () => {
             <button
               onClick={handleGetInfo}
               disabled={loadingInfo || !selectedDevice || process.isRunning}
-              className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-secondary flex w-full items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingInfo ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -96,7 +127,7 @@ export const IosBackup: React.FC = () => {
             />
 
             <div className="space-y-3">
-              <label className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-300 cursor-pointer hover:bg-slate-750">
+              <label className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-secondary)]">
                 <input
                   type="checkbox"
                   checked={encrypted}
@@ -109,7 +140,7 @@ export const IosBackup: React.FC = () => {
 
               {encrypted && (
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-slate-300">
+                  <label className="block text-sm font-medium text-[var(--text-primary)]">
                     Backup Password
                   </label>
                   <input
@@ -118,7 +149,7 @@ export const IosBackup: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter backup password..."
                     disabled={process.isRunning}
-                    className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="input-field w-full"
                   />
                 </div>
               )}
@@ -142,15 +173,15 @@ export const IosBackup: React.FC = () => {
           <div className="space-y-4">
             {/* Device info key-value display */}
             {deviceInfo && (
-              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                <h4 className="mb-3 text-sm font-medium text-white">Device Information</h4>
+              <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
+                <h4 className="mb-3 text-sm font-medium text-[var(--text-primary)]">Device Information</h4>
                 <div className="max-h-[300px] space-y-1 overflow-y-auto">
                   {Object.entries(deviceInfo).map(([key, value]) => (
                     <div key={key} className="flex gap-2 py-1 text-xs">
-                      <span className="shrink-0 font-medium text-slate-400 w-40 truncate">
+                      <span className="shrink-0 font-medium text-[var(--text-secondary)] w-40 truncate">
                         {key}
                       </span>
-                      <span className="text-slate-300 break-all">{value}</span>
+                      <span className="text-[var(--text-primary)] break-all">{value}</span>
                     </div>
                   ))}
                 </div>
@@ -158,11 +189,57 @@ export const IosBackup: React.FC = () => {
             )}
 
             {(process.isRunning || process.progress.percent > 0) && (
-              <ProgressIndicator
-                percent={process.progress.percent}
-                message={process.progress.message}
-                isRunning={process.isRunning}
-              />
+              <div className="space-y-4">
+                {/* Phase stepper + label */}
+                <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className={`text-sm font-medium ${isStalled && process.isRunning ? 'animate-pulse text-amber-400' : 'text-[var(--text-primary)]'}`}>
+                      {phaseLabel || process.progress.message || 'Starting…'}
+                    </span>
+                    {process.isRunning && (
+                      <span className="text-xs text-[var(--text-muted)]">Phase {phase} / 5</span>
+                    )}
+                  </div>
+
+                  {/* 5-segment progress bar */}
+                  <div className="mb-3 flex gap-1">
+                    {[1, 2, 3, 4, 5].map((p) => (
+                      <div
+                        key={p}
+                        className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                          p < phase
+                            ? 'bg-green-500'
+                            : p === phase
+                            ? process.isRunning
+                              ? 'bg-blue-500'
+                              : 'bg-green-500'
+                            : 'bg-[var(--border-color)]'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <ProgressIndicator
+                    percent={process.progress.percent}
+                    bytes={process.progress.bytes}
+                    totalBytes={process.progress.totalBytes}
+                    speed={process.progress.speed}
+                    eta={process.progress.eta}
+                    filesCount={process.progress.filesCount}
+                    totalFiles={process.progress.totalFiles}
+                    message=""
+                    isRunning={process.isRunning}
+                  />
+                </div>
+
+                {/* Output path banner — shown after completion */}
+                {outputPath && !process.isRunning && (
+                  <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+                    <p className="mb-1 text-xs font-semibold text-green-400">Backup saved to:</p>
+                    <p className="break-all font-mono text-xs text-[var(--text-primary)]">{outputPath}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
