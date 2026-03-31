@@ -1022,7 +1022,7 @@ export async function extractActivityTimeline(
   if (results[0].status === 'fulfilled') {
     const val = results[0].value as Record<string, unknown>;
     const messages = (val.messages ?? []) as unknown[];
-    for (const msg of messages) {
+    for (const [idx, msg] of messages.entries()) {
       const m = msg as Record<string, unknown>;
       const ts = typeof m.date === 'string' ? Date.parse(m.date as string) : 0;
       const senderLabel =
@@ -1030,7 +1030,7 @@ export async function extractActivityTimeline(
           ? 'Me'
           : (typeof m.contact_id === 'string' && m.contact_id ? m.contact_id : 'Contact');
       events.push({
-        id: `msg-${m.id ?? Math.random()}`,
+        id: `msg-${m.rowid ?? m.id ?? idx}`,
         type: 'message',
         timestamp: ts,
         summary: `${senderLabel}: ${String(m.text ?? '').substring(0, 80)}`,
@@ -1045,11 +1045,11 @@ export async function extractActivityTimeline(
   if (results[1].status === 'fulfilled') {
     const val = results[1].value as Record<string, unknown>;
     const calls = (val.calls ?? []) as unknown[];
-    for (const call of calls) {
+    for (const [idx, call] of calls.entries()) {
       const c = call as Record<string, unknown>;
       const ts = typeof c.date === 'string' ? Date.parse(c.date as string) : 0;
       events.push({
-        id: `call-${c.id ?? Math.random()}`,
+        id: `call-${c.rowid ?? c.id ?? idx}`,
         type: 'call',
         timestamp: ts,
         summary: `${c.answered === 1 ? 'Call' : 'Missed'} ${c.duration ? `(${c.duration}s)` : ''} — ${c.phone_number ?? 'Unknown'}`,
@@ -1064,10 +1064,10 @@ export async function extractActivityTimeline(
   if (results[2].status === 'fulfilled') {
     const val = results[2].value as Record<string, unknown>;
     const locs = (val.locations ?? []) as unknown[];
-    for (const loc of locs) {
+    for (const [idx, loc] of locs.entries()) {
       const l = loc as Record<string, unknown>;
       events.push({
-        id: `loc-${Math.random()}`,
+        id: `loc-${l.id ?? idx}`,
         type: 'location',
         timestamp: typeof l.timestamp === 'number' ? l.timestamp : 0,
         summary: `Location: ${Number(l.latitude ?? 0).toFixed(5)}, ${Number(l.longitude ?? 0).toFixed(5)}`,
@@ -1082,11 +1082,11 @@ export async function extractActivityTimeline(
   if (results[3].status === 'fulfilled') {
     const val = results[3].value as Record<string, unknown>;
     const hist = (val.history ?? []) as unknown[];
-    for (const visit of hist) {
+    for (const [idx, visit] of hist.entries()) {
       const v = visit as Record<string, unknown>;
       const ts = typeof v.visit_time === 'string' ? Date.parse(v.visit_time as string) : 0;
       events.push({
-        id: `safari-${Math.random()}`,
+        id: `safari-${v.id ?? v.rowid ?? idx}`,
         type: 'browse',
         timestamp: ts,
         summary: `Visited: ${String(v.title ?? v.url ?? 'Unknown').substring(0, 80)}`,
@@ -1101,11 +1101,11 @@ export async function extractActivityTimeline(
   if (results[4].status === 'fulfilled') {
     const val = results[4].value as Record<string, unknown>;
     const notes = (val.notes ?? []) as unknown[];
-    for (const note of notes) {
+    for (const [idx, note] of notes.entries()) {
       const n = note as Record<string, unknown>;
       const ts = typeof n.created === 'string' ? Date.parse(n.created as string) : 0;
       events.push({
-        id: `note-${Math.random()}`,
+        id: `note-${n.id ?? n.rowid ?? idx}`,
         type: 'note',
         timestamp: ts,
         summary: `Note: ${String(n.title ?? n.snippet ?? '').substring(0, 80)}`,
@@ -1148,9 +1148,8 @@ export async function extractLocationAccessLogs(
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const plist = require('plist');
     const rawBuffer = await fs.readFile(plistPath);
-    // plist.parse needs a string; binary plists need latin1 encoding
-    const rawStr = rawBuffer.toString('binary');
-    const parsed = plist.parse(rawStr) as Record<string, unknown>;
+    // plist.parse accepts a UTF-8 string; works for XML plists and bplist
+    const parsed = plist.parse(rawBuffer.toString()) as Record<string, unknown>;
 
     const entries: LocationAccessEntry[] = [];
     const authMap: Record<number, string> = {
@@ -1213,8 +1212,8 @@ export async function extractNetworkTrace(
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const plist = require('plist');
     const rawBuffer = await fs.readFile(wifiPlistPath);
-    const rawStr = rawBuffer.toString('binary');
-    const parsed = plist.parse(rawStr) as Record<string, unknown>;
+    // plist.parse accepts a UTF-8 string; works for XML plists and bplist
+    const parsed = plist.parse(rawBuffer.toString()) as Record<string, unknown>;
 
     const knownNetworks = parsed['List of known networks'] as unknown[] | undefined;
     if (Array.isArray(knownNetworks)) {
