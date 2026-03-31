@@ -85,11 +85,36 @@ export function registerIosHandlers(): void {
       let lastSpeedTs = Date.now();
       let lastSpeedBytes = 0;
 
+      // 5-phase model state — persists across onProgress calls
+      let phase = 1;
+      let phaseLabel = 'Connecting to device…';
+      let backupOutputPath: string | undefined;
+
       const onProgress = (p: ProcessProgress): void => {
         if (!win || win.isDestroyed()) return;
 
         // Parse idevicebackup2 stdout for rich progress data
         const line = p.data || '';
+
+        // --- Phase detection (evaluated before percent/file parsing) ---
+        if (/verif/i.test(line)) {
+          phase = 4;
+          phaseLabel = 'Verifying backup integrity…';
+        } else if (/backup successful/i.test(line)) {
+          phase = 5;
+          phaseLabel = 'Backup complete';
+          backupOutputPath = path.join(outputPath, udid);
+        } else if (/sending file/i.test(line) || /^\d+\.\d+%/.test(line.trim())) {
+          if (phase < 3) {
+            phase = 3;
+            phaseLabel = 'Transferring files…';
+          }
+        } else if (/backup directory|starting backup/i.test(line)) {
+          if (phase < 2) {
+            phase = 2;
+            phaseLabel = 'Building backup manifest…';
+          }
+        }
 
         // "5.23% done" or "Sending file 5 of 120 (5.23% done)"
         const pctMatch = line.match(/(\d+(?:\.\d+)?)%/);
@@ -136,7 +161,13 @@ export function registerIosHandlers(): void {
           totalFiles: fileMatch ? parseInt(fileMatch[2], 10) : undefined,
         };
 
-        win.webContents.send(IPC_CHANNELS.IOS_BACKUP_PROGRESS, rich);
+        win.webContents.send(IPC_CHANNELS.IOS_BACKUP_PROGRESS, {
+          ...rich,
+          phase,
+          phaseLabel,
+          message: phaseLabel,
+          ...(phase === 5 ? { outputPath: backupOutputPath } : {}),
+        });
       };
 
       try {
