@@ -94,12 +94,12 @@ export const IPC_CHANNELS = {
   IOS_HEALTH_EXTRACT_PROGRESS: 'ios:health-extract-progress',
   IOS_SCREENTIME_EXTRACT: 'ios:screentime-extract',
   IOS_SCREENTIME_EXTRACT_PROGRESS: 'ios:screentime-extract-progress',
-  IOS_INTELLIGENCE_TIMELINE:          'ios:intelligence-timeline',
+  IOS_INTELLIGENCE_TIMELINE: 'ios:intelligence-timeline',
   IOS_INTELLIGENCE_TIMELINE_PROGRESS: 'ios:intelligence-timeline-progress',
-  IOS_LOCATION_ACCESS:                'ios:location-access',
-  IOS_LOCATION_ACCESS_PROGRESS:       'ios:location-access-progress',
-  IOS_NETWORK_TRACE:                  'ios:network-trace',
-  IOS_NETWORK_TRACE_PROGRESS:         'ios:network-trace-progress',
+  IOS_LOCATION_ACCESS: 'ios:location-access',
+  IOS_LOCATION_ACCESS_PROGRESS: 'ios:location-access-progress',
+  IOS_NETWORK_TRACE: 'ios:network-trace',
+  IOS_NETWORK_TRACE_PROGRESS: 'ios:network-trace-progress',
 
   // IPED
   IPED_RUN: 'iped:run',
