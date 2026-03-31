@@ -1,4 +1,4 @@
-import React, { useEffect, Component, ReactNode } from 'react';
+import React, { useEffect, useState, Component, ReactNode } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './layouts/AppLayout';
 import { LoginScreen } from './pages/LoginScreen';
@@ -60,6 +60,7 @@ import { AudioTranscription } from './pages/AudioTranscription';
 import { WhatsAppMerge } from './pages/WhatsAppMerge';
 
 // iOS Collections
+import { IosQuickExtract } from './pages/IosQuickExtract';
 import { IosBackup } from './pages/IosBackup';
 import { IosFileExtraction } from './pages/IosFileExtraction';
 import { IosMessages } from './pages/IosMessages';
@@ -69,6 +70,12 @@ import { IosPhotos } from './pages/IosPhotos';
 import { IosAppData } from './pages/IosAppData';
 import { IosLocationHistory } from './pages/IosLocationHistory';
 import { IosDeletedData } from './pages/IosDeletedData';
+import { IosSafariHistory } from './pages/IosSafariHistory';
+import { IosNotes } from './pages/IosNotes';
+import { IosVoicemail } from './pages/IosVoicemail';
+import { IosHealthData } from './pages/IosHealthData';
+import { IosScreenTime } from './pages/IosScreenTime';
+import { IosIntelligence } from './pages/IosIntelligence';
 
 // Analysis
 import { IpedIntegration } from './pages/IpedIntegration';
@@ -93,6 +100,68 @@ import { ExifViewer } from './pages/ExifViewer';
 import { ToolConfiguration } from './pages/ToolConfiguration';
 import { SyncSettings } from './pages/SyncSettings';
 
+// ---------------------------------------------------------------------------
+// Auto-update banner
+// ---------------------------------------------------------------------------
+
+const UpdateBanner: React.FC = () => {
+  const [updateReady, setUpdateReady] = useState<{ version: string } | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<{ version: string } | null>(null);
+
+  useEffect(() => {
+    const unsubAvail = window.api.on('update:available', (info: unknown) => {
+      setUpdateAvailable(info as { version: string });
+    });
+    const unsubDl = window.api.on('update:downloaded', (info: unknown) => {
+      setUpdateReady(info as { version: string });
+      setUpdateAvailable(null);
+    });
+    return () => { unsubAvail(); unsubDl(); };
+  }, []);
+
+  if (updateReady) {
+    return (
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-2 text-sm"
+        style={{ background: '#1a3a1a', borderBottom: '1px solid #4ade80' }}>
+        <span style={{ color: '#4ade80' }}>
+          RMPG Forensics v{updateReady.version} downloaded — ready to install
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.api.invoke('update:install-now')}
+            className="rounded px-3 py-1 text-xs font-semibold"
+            style={{ background: '#4ade80', color: '#000' }}
+          >
+            Restart &amp; Update
+          </button>
+          <button onClick={() => setUpdateReady(null)}
+            className="rounded px-2 py-1 text-xs opacity-60 hover:opacity-100"
+            style={{ color: 'var(--text-muted)' }}>
+            Later
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (updateAvailable) {
+    return (
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-2 text-sm"
+        style={{ background: '#1a2a3a', borderBottom: '1px solid #6495ED' }}>
+        <span style={{ color: '#6495ED' }}>
+          Update available: v{updateAvailable.version} — downloading in background…
+        </span>
+        <button onClick={() => setUpdateAvailable(null)}
+          className="text-xs opacity-60 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>✕</button>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+// ---------------------------------------------------------------------------
+
 const App: React.FC = () => {
   const { isLoggedIn, loading, checkStatus } = useAuthStore();
 
@@ -114,6 +183,7 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+    <UpdateBanner />
     <HashRouter>
       <Routes>
         <Route element={<AppLayout />}>
@@ -149,6 +219,7 @@ const App: React.FC = () => {
           <Route path="/whatsapp/merge" element={<WhatsAppMerge />} />
 
           {/* iOS Collections */}
+          <Route path="/ios/quick-extract" element={<IosQuickExtract />} />
           <Route path="/ios/backup" element={<IosBackup />} />
           <Route path="/ios/file-extraction" element={<IosFileExtraction />} />
           <Route path="/ios/messages" element={<IosMessages />} />
@@ -158,6 +229,12 @@ const App: React.FC = () => {
           <Route path="/ios/app-data" element={<IosAppData />} />
           <Route path="/ios/location-history" element={<IosLocationHistory />} />
           <Route path="/ios/deleted-data" element={<IosDeletedData />} />
+          <Route path="/ios/safari-history" element={<IosSafariHistory />} />
+          <Route path="/ios/notes" element={<IosNotes />} />
+          <Route path="/ios/voicemail" element={<IosVoicemail />} />
+          <Route path="/ios/health-data" element={<IosHealthData />} />
+          <Route path="/ios/screen-time" element={<IosScreenTime />} />
+          <Route path="/ios/intelligence" element={<IosIntelligence />} />
 
           {/* Analysis */}
           <Route path="/analysis/iped" element={<IpedIntegration />} />

@@ -41,6 +41,7 @@ import {
   FileSpreadsheet,
   Code,
   DatabaseZap,
+  Zap,
   FileImage,
   Settings,
   RefreshCw,
@@ -54,6 +55,12 @@ import {
   Eraser,
   Navigation,
   AppWindow,
+  Globe,
+  NotebookPen,
+  Voicemail,
+  Heart,
+  Clock,
+  Brain,
 } from 'lucide-react';
 
 interface NavItem {
@@ -112,6 +119,8 @@ const navSections: NavSection[] = [
   {
     title: 'iOS Collections',
     items: [
+      { label: 'iOS Intelligence', path: '/ios/intelligence', icon: <Brain size={16} />, badge: 'NEW' },
+      { label: 'Quick Extract', path: '/ios/quick-extract', icon: <Zap size={16} />, badge: 'NEW' },
       { label: 'iOS Backup', path: '/ios/backup', icon: <Apple size={16} /> },
       { label: 'File Extraction', path: '/ios/file-extraction', icon: <FolderTree size={16} /> },
       { label: 'Messages (iMessage/SMS)', path: '/ios/messages', icon: <MessageCircle size={16} /> },
@@ -121,6 +130,11 @@ const navSections: NavSection[] = [
       { label: 'App Data', path: '/ios/app-data', icon: <AppWindow size={16} /> },
       { label: 'Location History', path: '/ios/location-history', icon: <Navigation size={16} /> },
       { label: 'Deleted Data Recovery', path: '/ios/deleted-data', icon: <Eraser size={16} /> },
+      { label: 'Safari History', path: '/ios/safari-history', icon: <Globe size={16} /> },
+      { label: 'Notes', path: '/ios/notes', icon: <NotebookPen size={16} /> },
+      { label: 'Voicemail', path: '/ios/voicemail', icon: <Voicemail size={16} /> },
+      { label: 'Health Data', path: '/ios/health-data', icon: <Heart size={16} /> },
+      { label: 'Screen Time', path: '/ios/screen-time', icon: <Clock size={16} /> },
     ],
   },
   {
