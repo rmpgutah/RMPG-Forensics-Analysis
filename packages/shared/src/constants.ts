@@ -1,5 +1,5 @@
 export const APP_NAME = 'RMPG Forensics Analysis';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.9';
 export const APP_AUTHOR = 'RMPG';
 
 export const IPC_CHANNELS = {
@@ -48,7 +48,9 @@ export const IPC_CHANNELS = {
   WHATSAPP_LIST_PACKAGES: 'whatsapp:list-packages',
   WHATSAPP_BROWSE_CONTACTS: 'whatsapp:browse-contacts',
   WHATSAPP_DECRYPT: 'whatsapp:decrypt',
+  WHATSAPP_DECRYPT_PROGRESS: 'whatsapp:decrypt-progress',
   WHATSAPP_DECRYPT_MEDIA: 'whatsapp:decrypt-media',
+  WHATSAPP_DECRYPT_MEDIA_PROGRESS: 'whatsapp:decrypt-media-progress',
   WHATSAPP_PARSE_DB: 'whatsapp:parse-db',
   WHATSAPP_PARSE_LEGACY_DB: 'whatsapp:parse-legacy-db',
   WHATSAPP_GENERATE_REPORT: 'whatsapp:generate-report',
@@ -59,6 +61,7 @@ export const IPC_CHANNELS = {
 
   // iOS
   IOS_LIST_DEVICES: 'ios:list-devices',
+  IOS_FIND_BACKUP_PATH: 'ios:find-backup-path',
   IOS_BACKUP: 'ios:backup',
   IOS_BACKUP_PROGRESS: 'ios:backup-progress',
   IOS_GET_INFO: 'ios:get-info',
@@ -81,6 +84,22 @@ export const IPC_CHANNELS = {
   IOS_LOCATION_EXTRACT_PROGRESS: 'ios:location-extract-progress',
   IOS_DELETED_RECOVER: 'ios:deleted-recover',
   IOS_DELETED_RECOVER_PROGRESS: 'ios:deleted-recover-progress',
+  IOS_SAFARI_EXTRACT: 'ios:safari-extract',
+  IOS_SAFARI_EXTRACT_PROGRESS: 'ios:safari-extract-progress',
+  IOS_NOTES_EXTRACT: 'ios:notes-extract',
+  IOS_NOTES_EXTRACT_PROGRESS: 'ios:notes-extract-progress',
+  IOS_VOICEMAIL_EXTRACT: 'ios:voicemail-extract',
+  IOS_VOICEMAIL_EXTRACT_PROGRESS: 'ios:voicemail-extract-progress',
+  IOS_HEALTH_EXTRACT: 'ios:health-extract',
+  IOS_HEALTH_EXTRACT_PROGRESS: 'ios:health-extract-progress',
+  IOS_SCREENTIME_EXTRACT: 'ios:screentime-extract',
+  IOS_SCREENTIME_EXTRACT_PROGRESS: 'ios:screentime-extract-progress',
+  IOS_INTELLIGENCE_TIMELINE:          'ios:intelligence-timeline',
+  IOS_INTELLIGENCE_TIMELINE_PROGRESS: 'ios:intelligence-timeline-progress',
+  IOS_LOCATION_ACCESS:                'ios:location-access',
+  IOS_LOCATION_ACCESS_PROGRESS:       'ios:location-access-progress',
+  IOS_NETWORK_TRACE:                  'ios:network-trace',
+  IOS_NETWORK_TRACE_PROGRESS:         'ios:network-trace-progress',
 
   // IPED
   IPED_RUN: 'iped:run',
@@ -145,6 +164,8 @@ export const IPC_CHANNELS = {
   // Tools
   TOOLS_CHECK: 'tools:check',
   TOOLS_CONFIGURE: 'tools:configure',
+  TOOLS_INSTALL: 'tools:install',
+  TOOLS_INSTALL_PROGRESS: 'tools:install-progress',
 
   // Auth / 2FA
   AUTH_CHECK_STATUS: 'auth:check-status',
@@ -217,9 +238,18 @@ export const IPC_CHANNELS = {
   // WhatsApp Merge
   WHATSAPP_MERGE: 'whatsapp:merge',
 
+  // File system helpers
+  FILE_WRITE: 'fs:write-file',
+
+  // Auth extras
+  AUTH_TRUST_DEVICE: 'auth:trust-device',
+
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',
+
+  // Auto-scan on device connection
+  DEVICE_AUTO_SCAN: 'device:auto-scan',
 } as const;
 
 export const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha384', 'sha512'] as const;
