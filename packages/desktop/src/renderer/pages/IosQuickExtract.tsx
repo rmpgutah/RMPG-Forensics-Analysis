@@ -63,6 +63,8 @@ interface ModuleResult {
   count?: number;
   error?: string;
   data?: unknown;
+  percent?: number;
+  progressMessage?: string;
 }
 
 type Mode = 'device' | 'backup';
@@ -111,6 +113,25 @@ export const IosQuickExtract: React.FC = () => {
       setBackupPhaseLabel('');
     }
   }, [backupTask?.status]);
+
+  // Subscribe to per-module progress channels while extraction is running
+  useEffect(() => {
+    if (!running) return;
+    const cleanups = MODULES.filter((m) => selected.has(m.id)).map((mod) => {
+      const progressChannel = `${mod.channel}-progress`;
+      return window.api.on(progressChannel, (data: Record<string, unknown>) => {
+        const percent = typeof data.percent === 'number' ? data.percent : undefined;
+        const msg = typeof data.message === 'string' ? data.message :
+                    typeof data.data === 'string' ? data.data : undefined;
+        setResults((prev) => {
+          const cur = prev[mod.id];
+          if (!cur || cur.status !== 'running') return prev;
+          return { ...prev, [mod.id]: { ...cur, percent, progressMessage: msg } };
+        });
+      });
+    });
+    return () => cleanups.forEach((fn) => fn());
+  }, [running, selected]);
 
   const toggleModule  = (id: string) => {
     if (running) return;
@@ -205,6 +226,14 @@ export const IosQuickExtract: React.FC = () => {
   const errorCount   = Object.values(results).filter((r) => r.status === 'error').length;
   const totalSelected = selected.size;
   const allDone      = !running && doneCount + errorCount === totalSelected && totalSelected > 0;
+
+  // Overall extraction progress: completed modules + partial credit from in-progress percents
+  const runningResults = Object.values(results).filter((r) => r.status === 'running');
+  const partialCredit  = runningResults.reduce((sum, r) => sum + (r.percent ?? 0) / 100, 0);
+  const overallPercent = totalSelected > 0
+    ? Math.min(100, ((doneCount + errorCount + partialCredit) / totalSelected) * 100)
+    : 0;
+  const currentlyRunning = MODULES.filter((m) => results[m.id]?.status === 'running');
   const activeDevice = iosDevices.find((d) => d.udid === selectedUdid);
   const canStart     = mode === 'device'
     ? (selectedUdid !== '' && outputFolder !== '')
@@ -421,6 +450,23 @@ export const IosQuickExtract: React.FC = () => {
                   style={{ color: isSelected ? 'var(--text-primary)' : 'var(--text-muted)' }}>
                   {mod.label}
                 </span>
+                {res?.status === 'running' && (
+                  <div className="w-full mt-0.5">
+                    <div className="h-0.5 w-full rounded-full bg-[var(--border-color)] overflow-hidden">
+                      {(res.percent ?? 0) > 0 ? (
+                        <div
+                          className="h-full rounded-full bg-[#6495ED] transition-all duration-300"
+                          style={{ width: `${res.percent}%` }}
+                        />
+                      ) : (
+                        <div className="h-full w-1/3 rounded-full bg-[#6495ED] animate-pulse" />
+                      )}
+                    </div>
+                    {(res.percent ?? 0) > 0 && (
+                      <span className="text-[9px] text-[#6495ED]">{res.percent?.toFixed(0)}%</span>
+                    )}
+                  </div>
+                )}
                 {res?.status === 'done' && res.count !== undefined && (
                   <span className="text-[10px] text-green-400">{res.count.toLocaleString()} records</span>
                 )}
@@ -466,6 +512,58 @@ export const IosQuickExtract: React.FC = () => {
         )}
       </div>
 
+      {/* ── Overall extraction progress ───────────────────────────────── */}
+      {running && Object.keys(results).length > 0 && (
+        <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 space-y-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-[var(--text-primary)]">
+              Overall Progress — {doneCount + errorCount} of {totalSelected} complete
+            </span>
+            <span className="text-[var(--text-muted)]">{overallPercent.toFixed(0)}%</span>
+          </div>
+
+          {/* Overall bar */}
+          <div className="h-2 w-full rounded-full bg-[var(--border-color)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-all duration-500"
+              style={{ width: `${overallPercent}%` }}
+            />
+          </div>
+
+          {/* Currently active modules */}
+          {currentlyRunning.length > 0 && (
+            <div className="space-y-2">
+              {currentlyRunning.map((mod) => {
+                const res = results[mod.id];
+                const pct = res?.percent ?? 0;
+                return (
+                  <div key={mod.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                        <Loader2 size={11} className="animate-spin text-[#6495ED]" />
+                        {mod.label}
+                        {res?.progressMessage && (
+                          <span className="text-[var(--text-muted)] truncate max-w-48">
+                            — {res.progressMessage}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[var(--text-muted)]">{pct > 0 ? `${pct.toFixed(0)}%` : '…'}</span>
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-[var(--border-color)] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#6495ED] transition-all duration-300"
+                        style={{ width: pct > 0 ? `${pct}%` : '100%', opacity: pct > 0 ? 1 : 0.3 }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Results ───────────────────────────────────────────────────── */}
       {Object.keys(results).length > 0 && (
         <div className="card !p-0 overflow-hidden">
@@ -484,7 +582,10 @@ export const IosQuickExtract: React.FC = () => {
                   </span>
                   {res.status === 'running' && (
                     <span className="flex items-center gap-1.5 text-xs text-[#6495ED]">
-                      <Loader2 size={12} className="animate-spin" /> Extracting…
+                      <Loader2 size={12} className="animate-spin" />
+                      {res.percent != null && res.percent > 0
+                        ? `${res.percent.toFixed(0)}%`
+                        : 'Extracting…'}
                     </span>
                   )}
                   {res.status === 'done' && (
