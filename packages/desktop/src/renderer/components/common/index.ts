@@ -11,3 +11,4 @@ export { DeviceStatus } from './DeviceStatus';
 export { IosDeviceBar } from './IosDeviceBar';
 export { BackgroundTaskBar } from './BackgroundTaskBar';
 export { ShortcutsModal } from './ShortcutsModal';
+export { ErrorBanner } from './ErrorBanner';
