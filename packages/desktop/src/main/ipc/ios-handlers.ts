@@ -63,9 +63,9 @@ export function registerIosHandlers(): void {
         iosService.getDeviceInfo(udid),
         iosService.getDeviceDiagnostics(udid).catch(() => ({})),
       ]);
-      return { ...deviceInfo, ...(diagnostics as object) };
+      return { ...deviceInfo, ...(diagnostics ?? {}) };
     } catch (err) {
-      throw new Error((err as Error).message);
+      throw new Error((err instanceof Error ? err.message : String(err)));
     }
   });
 
@@ -187,7 +187,7 @@ export function registerIosHandlers(): void {
           return { success: false, error: errMsg };
         }
       } catch (err) {
-        return { success: false, error: (err as Error).message };
+        return { success: false, error: (err instanceof Error ? err.message : String(err)) };
       }
     }
   );
@@ -296,20 +296,40 @@ export function registerIosHandlers(): void {
   // ---------------------------------------------------------------------------
   ipcMain.handle(
     IPC_CHANNELS.IOS_PHOTOS_EXTRACT,
-    async (_event, options: { backupDir: string; limit?: number; mediaType?: 'photo' | 'video' | 'all' }) => {
+    async (_event, options: { backupDir: string; outputPath?: string; limit?: number; mediaType?: 'photo' | 'video' | 'all' }) => {
       const win = BrowserWindow.getAllWindows()[0] ?? null;
-      win?.webContents.send(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, {
-        type: 'status', data: 'Scanning photo library…', timestamp: Date.now(), percent: 10, message: 'Scanning photo library…',
-      });
+      const send = (msg: string, percent: number, extra?: object) =>
+        win?.webContents.send(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, {
+          type: 'status', data: msg, timestamp: Date.now(), percent, message: msg, ...extra,
+        });
+
+      send('Scanning photo library…', 10);
       const result = await iosService.extractPhotos(options.backupDir, {
         limit: options.limit,
         mediaType: options.mediaType,
       });
+
+      // If an output path is provided, copy actual media files out of the backup
+      if (options.outputPath && !result.error && result.assets.length > 0) {
+        const photosDir = path.join(options.outputPath, 'Photos');
+        send(`Copying ${result.assets.length} media files to ${photosDir}…`, 30);
+        const copyResult = await iosService.copyPhotosToFolder(
+          options.backupDir,
+          photosDir,
+          (done, total) => {
+            const pct = 30 + Math.round((done / total) * 65);
+            send(`Copying media files… ${done}/${total}`, pct, { filesCount: done, totalFiles: total });
+          }
+        );
+        const msg = copyResult.error
+          ? `Metadata: ${result.assets.length} assets · Copy error: ${copyResult.error}`
+          : `Copied ${copyResult.copied} media files to Photos/ folder`;
+        send(msg, 100, { filesCount: result.assets?.length });
+        return { ...result, copied: copyResult.copied, skipped: copyResult.skipped, photosDir };
+      }
+
       const msg = result.error ? `Error: ${result.error}` : `Found ${result.assets.length} assets`;
-      win?.webContents.send(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, {
-        type: 'status', data: msg, timestamp: Date.now(), percent: 100, message: msg,
-        filesCount: result.assets?.length,
-      });
+      send(msg, 100, { filesCount: result.assets?.length });
       return result;
     }
   );

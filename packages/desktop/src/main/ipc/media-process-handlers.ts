@@ -70,7 +70,7 @@ export function registerMediaProcessHandlers(): void {
         hashAlgorithm = 'sha256',
         generateHashLog = true,
       } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -151,7 +151,7 @@ export function registerMediaProcessHandlers(): void {
       }
     ) => {
       const { files, outputPath, title = 'Media Processing Report' } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

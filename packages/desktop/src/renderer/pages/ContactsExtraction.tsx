@@ -85,7 +85,7 @@ export const ContactsExtraction: React.FC = () => {
         (c) => `"${c.name}","${c.phone}","${c.email ?? ''}","${c.organization ?? ''}"`
       );
       const csvPath = `${outputFolder}/contacts_${selectedDevice?.serial ?? 'export'}.csv`;
-      await window.api.invoke('fs:write-file', csvPath, [header, ...rows].join('\n'));
+      await window.api.invoke(IPC_CHANNELS.FILE_WRITE, csvPath, [header, ...rows].join('\n'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -100,7 +100,7 @@ export const ContactsExtraction: React.FC = () => {
           `"${m.address}","${m.contactName ?? ''}","${m.body.replace(/"/g, '""')}","${m.date}","${m.type}"`
       );
       const csvPath = `${outputFolder}/sms_${selectedDevice?.serial ?? 'export'}.csv`;
-      await window.api.invoke('fs:write-file', csvPath, [header, ...rows].join('\n'));
+      await window.api.invoke(IPC_CHANNELS.FILE_WRITE, csvPath, [header, ...rows].join('\n'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -209,15 +209,17 @@ export const ContactsExtraction: React.FC = () => {
 
           {/* Statistics */}
           <div className="card">
-            <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Statistics</h3>
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Statistics</h3>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-blue-50 p-3 text-center">
+              <div className="rounded-lg p-3 text-center"
+                style={{ background: 'rgba(100,149,237,0.12)', border: '1px solid rgba(100,149,237,0.3)' }}>
                 <p className="text-2xl font-bold text-[#6495ED]">{contacts.length}</p>
-                <p className="text-xs text-[var(--text-muted)]">Contacts</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Contacts</p>
               </div>
-              <div className="rounded-lg bg-purple-50 p-3 text-center">
-                <p className="text-2xl font-bold text-purple-500">{smsMessages.length}</p>
-                <p className="text-xs text-[var(--text-muted)]">SMS Messages</p>
+              <div className="rounded-lg p-3 text-center"
+                style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}>
+                <p className="text-2xl font-bold text-purple-400">{smsMessages.length}</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>SMS Messages</p>
               </div>
             </div>
           </div>
@@ -266,7 +268,8 @@ export const ContactsExtraction: React.FC = () => {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-500/40 p-3 text-sm text-red-400"
+              style={{ background: 'rgba(239,68,68,0.1)' }}>
               {error}
             </div>
           )}
@@ -296,7 +299,7 @@ export const ContactsExtraction: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-[var(--border-color)]">
                       {filteredContacts.map((contact) => (
-                        <tr key={contact.id} className="hover:bg-[#F0F0FF] transition-colors">
+                        <tr key={contact.id} className="hover:bg-[var(--bg-hover)] transition-colors">
                           <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                             <div className="flex items-center gap-2">
                               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-primary)] text-xs font-bold text-[#6495ED]">
@@ -356,7 +359,7 @@ export const ContactsExtraction: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-[var(--border-color)]">
                       {filteredSms.map((msg) => (
-                        <tr key={msg.id} className="hover:bg-[#F0F0FF] transition-colors">
+                        <tr key={msg.id} className="hover:bg-[var(--bg-hover)] transition-colors">
                           <td className="px-4 py-2.5">
                             <span
                               className={`badge ${

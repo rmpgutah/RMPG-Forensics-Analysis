@@ -19,7 +19,7 @@ export function registerTrashRecoveryHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TRASH_SCAN,
     async (_event, serial: string) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -120,7 +120,7 @@ export function registerTrashRecoveryHandlers(): void {
       }
     ) => {
       const { serial, files, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

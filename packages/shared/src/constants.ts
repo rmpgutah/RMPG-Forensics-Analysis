@@ -1,5 +1,8 @@
 export const APP_NAME = 'RMPG Forensics Analysis';
-export const APP_VERSION = '1.0.10';
+// Version is injected by Vite (define plugin) from desktop/package.json at build time.
+// Falls back to a literal for unit-test environments where the define is absent.
+export const APP_VERSION: string =
+  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.43';
 export const APP_AUTHOR = 'RMPG';
 
 export const IPC_CHANNELS = {
@@ -11,6 +14,8 @@ export const IPC_CHANNELS = {
   CASE_EXPORT: 'case:export',
   CASE_IMPORT: 'case:import',
   CASE_SET_PATH: 'case:set-path',
+  CASE_SAVE_NOTES: 'case:save-notes',
+  CASE_EXPORT_PDF: 'case:export-pdf',
 
   // Dialog
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',
@@ -250,6 +255,10 @@ export const IPC_CHANNELS = {
 
   // Auto-scan on device connection
   DEVICE_AUTO_SCAN: 'device:auto-scan',
+
+  // AI Forensic Agent
+  AI_AGENT_QUERY: 'ai:agent-query',
+  AI_AGENT_STREAM: 'ai:agent-stream',
 } as const;
 
 export const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha384', 'sha512'] as const;

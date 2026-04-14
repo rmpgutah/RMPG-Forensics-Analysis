@@ -79,14 +79,14 @@ export const OcrProcessing: React.FC = () => {
           />
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-300">
+            <label className="block text-sm font-medium text-[var(--text-primary)]">
               OCR Language
             </label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               disabled={process.isRunning}
-              className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              className="input-field w-full"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.value} value={lang.value}>
@@ -111,13 +111,13 @@ export const OcrProcessing: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-medium text-white">Extracted Text</h4>
+              <h4 className="text-sm font-medium text-[var(--text-primary)]">Extracted Text</h4>
               {extractedText && (
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1.5 rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-700 transition"
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--border-color)] px-2.5 py-1 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition"
                 >
                   {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
                   {copied ? 'Copied' : 'Copy'}
@@ -129,7 +129,7 @@ export const OcrProcessing: React.FC = () => {
               onChange={(e) => setExtractedText(e.target.value)}
               placeholder="OCR results will appear here..."
               readOnly={process.isRunning}
-              className="h-[350px] w-full resize-none rounded-md border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-300 placeholder-slate-600 focus:border-blue-500 focus:outline-none"
+              className="h-[350px] w-full resize-none rounded-md border border-[var(--border-color)] bg-[var(--bg-primary)] p-3 font-mono text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#6495ED]/50"
             />
           </div>
         </div>

@@ -85,7 +85,7 @@ export function registerSamsungUnlockHandlers(): void {
       }
 
       const { comPort, firmwarePath, pitFilePath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

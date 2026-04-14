@@ -97,7 +97,7 @@ export const GeolocationMapper: React.FC = () => {
       const rows = points.map(
         (p) => `${p.latitude},${p.longitude},${p.altitude ?? ''},${p.timestamp ?? ''},${p.source},${p.label ?? ''}`
       );
-      await window.api.invoke('fs:write-file', csvPath, [header, ...rows].join('\n'));
+      await window.api.invoke(IPC_CHANNELS.FILE_WRITE, csvPath, [header, ...rows].join('\n'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -126,9 +126,10 @@ export const GeolocationMapper: React.FC = () => {
                   }}
                   className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                     source === opt.key
-                      ? 'border-[#6495ED] bg-blue-50'
+                      ? 'border-[#6495ED]'
                       : 'border-[var(--border-color)] hover:border-[var(--border-color)] hover:bg-[var(--bg-hover)]'
                   }`}
+                  style={source === opt.key ? { background: 'rgba(100,149,237,0.12)' } : {}}
                 >
                   <span className={source === opt.key ? 'text-[#6495ED]' : 'text-[var(--text-muted)]'}>
                     {opt.icon}
@@ -219,7 +220,7 @@ export const GeolocationMapper: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-color)]">
                     {points.map((p, i) => (
-                      <tr key={i} className="hover:bg-[#F0F0FF]">
+                      <tr key={i} className="hover:bg-[var(--bg-hover)]">
                         <td className="px-3 py-1.5 text-[var(--text-muted)]">{i + 1}</td>
                         <td className="px-3 py-1.5 font-mono text-[var(--text-primary)]">{p.latitude.toFixed(6)}</td>
                         <td className="px-3 py-1.5 font-mono text-[var(--text-primary)]">{p.longitude.toFixed(6)}</td>
@@ -233,7 +234,8 @@ export const GeolocationMapper: React.FC = () => {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-500/40 p-3 text-sm text-red-400"
+              style={{ background: 'rgba(239,68,68,0.1)' }}>
               {error}
             </div>
           )}

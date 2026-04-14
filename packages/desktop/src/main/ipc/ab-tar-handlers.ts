@@ -30,7 +30,7 @@ export function registerAbTarHandlers(): void {
       }
     ) => {
       const { inputPath, outputPath, password } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

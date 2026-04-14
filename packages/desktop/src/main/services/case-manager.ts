@@ -291,6 +291,16 @@ export async function importCase(zipPath: string, outputDir: string): Promise<Fo
 }
 
 /**
+ * Save free-text notes to an existing case manifest.
+ */
+export async function saveNotes(casePath: string, notes: string): Promise<void> {
+  const forensicCase = await openCase(casePath);
+  forensicCase.notes = notes;
+  forensicCase.updatedAt = isoNow();
+  await writeManifest(casePath, forensicCase);
+}
+
+/**
  * Get the path to a specific subdirectory within a case folder.
  */
 export function getCaseSubdir(

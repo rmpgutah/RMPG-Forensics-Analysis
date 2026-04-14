@@ -97,7 +97,7 @@ export const DeviceInfo: React.FC = () => {
           const content = Array.isArray(val) ? val.join('\n') : String(val ?? 'Not fetched');
           return `=== ${t.label} ===\n${content}`;
         }).join('\n\n');
-        await window.api.invoke('fs:write-file', savePath, lines);
+        await window.api.invoke(IPC_CHANNELS.FILE_WRITE, savePath, lines);
       }
     } catch {
       // Export cancelled or failed
@@ -127,7 +127,7 @@ export const DeviceInfo: React.FC = () => {
           <button
             onClick={handleExtractAll}
             disabled={!selectedDevice}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="btn-primary flex w-full items-center justify-center gap-2 text-sm"
           >
             <Download size={14} />
             Extract All
@@ -136,7 +136,7 @@ export const DeviceInfo: React.FC = () => {
           <button
             onClick={handleExport}
             disabled={!selectedDevice}
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            className="btn-secondary flex w-full items-center justify-center gap-2 text-sm"
           >
             Export to Text
           </button>
@@ -144,16 +144,18 @@ export const DeviceInfo: React.FC = () => {
 
         <div className="flex-1">
           {/* Tabs */}
-          <div className="mb-4 flex flex-wrap gap-1 rounded-lg border border-slate-700 bg-slate-800/50 p-1">
+          <div className="mb-4 flex flex-wrap gap-1 rounded-lg border p-1"
+            style={{ borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   activeTab === tab.key
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                    ? 'bg-[#6495ED] text-white'
+                    : 'hover:bg-[var(--bg-hover)]'
                 }`}
+                style={activeTab === tab.key ? {} : { color: 'var(--text-secondary)' }}
               >
                 {tab.icon}
                 {tab.label}
@@ -162,36 +164,37 @@ export const DeviceInfo: React.FC = () => {
           </div>
 
           {/* Content */}
-          <div className="min-h-[400px] rounded-lg border border-slate-700 bg-slate-950 p-4">
+          <div className="card min-h-[400px]">
             {!selectedDevice ? (
-              <p className="text-sm text-slate-500">Select a device to view properties.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a device to view properties.</p>
             ) : loading[activeTab] ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                 <Loader2 size={14} className="animate-spin" />
-                Fetching {activeTab} data...
+                Fetching {activeTab} data…
               </div>
             ) : error ? (
               <p className="text-sm text-red-400">{error}</p>
             ) : currentData === undefined ? (
-              <p className="text-sm text-slate-500">
-                Click on a tab or use &quot;Extract All&quot; to fetch data.
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Click a tab or use &quot;Extract All&quot; to fetch data.
               </p>
             ) : activeTab === 'packages' ? (
               <div className="space-y-1">
-                <p className="mb-2 text-xs text-slate-500">
+                <p className="mb-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   {Array.isArray(currentData) ? currentData.length : 0} packages found
                 </p>
                 <div className="max-h-[350px] overflow-y-auto font-mono text-xs">
                   {Array.isArray(currentData) &&
                     currentData.map((pkg, i) => (
-                      <div key={i} className="text-slate-300 py-0.5">
+                      <div key={i} className="py-0.5" style={{ color: 'var(--text-primary)' }}>
                         {pkg}
                       </div>
                     ))}
                 </div>
               </div>
             ) : (
-              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-300">
+              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap font-mono text-xs"
+                style={{ color: 'var(--text-primary)' }}>
                 {String(currentData)}
               </pre>
             )}

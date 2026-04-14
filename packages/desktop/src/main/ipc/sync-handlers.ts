@@ -30,7 +30,7 @@ export function registerSyncHandlers(): void {
       }
     ) => {
       const { userId, casePath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -96,7 +96,7 @@ export function registerSyncHandlers(): void {
       }
     ) => {
       const { userId, caseId, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

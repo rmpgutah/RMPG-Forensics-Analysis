@@ -16,7 +16,7 @@ export interface SettingsState {
     defaultOutputDir: string;
     hashAlgorithm: 'md5' | 'sha1' | 'sha256';
     logLevel: 'info' | 'debug' | 'warning' | 'error';
-    theme: 'dark';
+    theme: 'dark' | 'light';
   };
 
   setToolPath: (tool: keyof SettingsState['toolPaths'], path: string) => void;

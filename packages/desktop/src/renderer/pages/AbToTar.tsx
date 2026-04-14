@@ -70,9 +70,9 @@ export const AbToTar: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-            <h4 className="mb-2 text-sm font-medium text-white">About AB to TAR</h4>
-            <p className="text-xs text-slate-400">
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
+            <h4 className="mb-2 text-sm font-medium text-[var(--text-primary)]">About AB to TAR</h4>
+            <p className="text-xs text-[var(--text-secondary)]">
               Android backup (.ab) files are encrypted/compressed archives created
               by ADB. This tool converts them into standard .tar archives that can
               be opened with any archive manager for forensic analysis.

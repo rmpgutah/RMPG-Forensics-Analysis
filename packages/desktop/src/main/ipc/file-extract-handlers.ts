@@ -35,7 +35,7 @@ export function registerFileExtractHandlers(): void {
         outputDir,
         maxFiles = 10000,
       } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -54,17 +54,18 @@ export function registerFileExtractHandlers(): void {
         `Searching for files with extensions: ${extensions.join(', ')}...`
       );
 
-      // Build the find command with -iname for case-insensitive matching
-      const nameFilters = extensions
-        .map((ext) => {
-          const normalized = ext.startsWith('.') ? ext : `.${ext}`;
-          return `-iname "*${normalized}"`;
-        })
-        .join(' -o ');
+      // Sanitize: extensions must be alphanum+dot only; searchPath must be absolute
+      const safeExts = extensions.map((ext) => {
+        const normalized = (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase();
+        if (!/^\.[a-z0-9]+$/.test(normalized)) throw new Error(`Invalid extension: ${ext}`);
+        return normalized;
+      });
+      if (!/^\//.test(searchPath)) throw new Error('searchPath must be an absolute path');
+      const safeMax = Math.max(1, Math.min(Number(maxFiles) || 10000, 100000));
 
-      const findCommand = `find ${searchPath} \\( ${nameFilters} \\) -type f 2>/dev/null | head -${maxFiles}`;
-
-      const findOutput = await adbService.shell(serial, findCommand);
+      // Use adb shell with explicit argument list to avoid shell injection
+      const findArgs = [searchPath, '(', ...safeExts.flatMap((ext, i) => i > 0 ? ['-o', '-iname', `*${ext}`] : ['-iname', `*${ext}`]), ')', '-type', 'f'];
+      const findOutput = await adbService.shell(serial, `find ${findArgs.map(a => JSON.stringify(a)).join(' ')} | head -${safeMax}`);
       const remoteFiles = findOutput
         .trim()
         .split(/\r?\n/)

@@ -56,7 +56,7 @@ export function registerScreenshotHandlers(): void {
         swipeStartY = 1500,
         swipeEndY = 500,
       } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -89,9 +89,12 @@ export function registerScreenshotHandlers(): void {
         if (i < scrollCount - 1) {
           sendProgress(`[${i + 1}/${scrollCount}] Scrolling...`);
           // ADB swipe: input swipe x1 y1 x2 y2 [duration_ms]
+          const safeStartY = Math.round(Number(swipeStartY));
+          const safeEndY = Math.round(Number(swipeEndY));
+          if (!Number.isFinite(safeStartY) || !Number.isFinite(safeEndY)) throw new Error('Invalid swipe coordinates');
           await adbService.shell(
             serial,
-            `input swipe 500 ${swipeStartY} 500 ${swipeEndY} 300`
+            `input swipe 500 ${safeStartY} 500 ${safeEndY} 300`
           );
           // Wait for the scroll animation to settle
           await sleep(delayMs);

@@ -25,6 +25,8 @@ import { registerToolsHandlers } from './tools-handlers';
 import { registerSyncHandlers } from './sync-handlers';
 import { registerAuthHandlers } from './auth-handlers';
 import { registerMissingHandlers } from './missing-handlers';
+import { registerAutoScanHandlers } from './auto-scan-handlers';
+import { registerAiAgentHandlers } from './ai-agent-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -107,6 +109,12 @@ export function registerAllIpcHandlers(): void {
 
   // Authentication & 2FA
   registerAuthHandlers();
+
+  // Auto-scan on device connection
+  registerAutoScanHandlers();
+
+  // AI Forensic Agent
+  registerAiAgentHandlers();
 
   // Stub handlers for features not yet fully implemented
   registerMissingHandlers();

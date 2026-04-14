@@ -8,3 +8,6 @@ export { useSettingsStore } from './settings-store';
 export type { SettingsState } from './settings-store';
 
 export { useAuthStore } from './auth-store';
+
+export { useBackupStore } from './backup-store';
+export type { BackupTask, BackupProgress } from './backup-store';

@@ -29,7 +29,7 @@ export function registerIpedHandlers(): void {
       }
     ) => {
       const { inputPath, outputPath, ipedJarPath, profile, additionalArgs } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

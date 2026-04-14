@@ -23,7 +23,8 @@ import {
   Clock,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar, ProgressIndicator } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -104,15 +105,8 @@ export const IosPhotos: React.FC = () => {
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoRecord | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [extractProgress, setExtractProgress] = useState<number>(0);
+  const [extractProgress, setExtractProgress] = useState<{ percent: number; message?: string; bytes?: number; totalBytes?: number; speed?: number; eta?: number; filesCount?: number; totalFiles?: number }>({ percent: 0 });
   const pageSize = viewMode === 'grid' ? 60 : 50;
-
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, { title: 'Select iOS Backup Folder' });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
 
   const handleBrowseOutput = async () => {
     try {
@@ -143,7 +137,7 @@ export const IosPhotos: React.FC = () => {
   const handleBulkExtract = async () => {
     if (!outputPath) return;
     setExtracting(true);
-    setExtractProgress(0);
+    setExtractProgress({ percent: 0 });
     try {
       const ids = selectedIds.size > 0 ? Array.from(selectedIds) : undefined;
       await window.api.invoke(IPC_CHANNELS.IOS_PHOTOS_EXTRACT, {
@@ -161,9 +155,10 @@ export const IosPhotos: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, (_event: unknown, data: { percent: number }) => {
-      setExtractProgress(data.percent);
-      if (data.percent >= 100) setExtracting(false);
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, (_event: unknown, data: Record<string, unknown>) => {
+      const pct = typeof data.percent === 'number' ? data.percent : 0;
+      setExtractProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
+      if (pct >= 100) setExtracting(false);
     });
     return () => { cleanup?.(); };
   }, []);
@@ -218,14 +213,12 @@ export const IosPhotos: React.FC = () => {
 
       {/* Source + Output */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>iOS Backup Source</label>
-            <div className="flex gap-2">
-              <input type="text" value={backupPath} readOnly placeholder="Select iOS backup folder..." className="input-field flex-1" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading || extracting}>Browse</button>
-            </div>
-          </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading || extracting}
+          />
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Output Folder</label>
             <div className="flex gap-2">
@@ -233,29 +226,34 @@ export const IosPhotos: React.FC = () => {
               <button onClick={handleBrowseOutput} className="btn-secondary" disabled={extracting}>Browse</button>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleExtractMetadata} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Image size={16} className="mr-2" />}
-            {loading ? 'Scanning...' : 'Scan Photos & Videos'}
-          </button>
-          <button onClick={handleBulkExtract} className="btn-primary" disabled={!outputPath || extracting || photos.length === 0}>
-            {extracting ? <Loader2 size={16} className="animate-spin mr-2" /> : <Download size={16} className="mr-2" />}
-            {selectedIds.size > 0 ? `Extract Selected (${selectedIds.size})` : 'Extract All'}
-          </button>
+          <div className="flex justify-end gap-2">
+            <button onClick={handleExtractMetadata} className="btn-primary" disabled={!backupPath || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Scanning...' : 'Scan Photos & Videos'}
+            </button>
+            <button onClick={handleBulkExtract} className="btn-primary" disabled={!outputPath || extracting || photos.length === 0}>
+              {extracting ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {selectedIds.size > 0 ? `Extract Selected (${selectedIds.size})` : 'Extract All'}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Progress */}
       {extracting && (
-        <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="flex justify-between text-sm mb-2">
-            <span style={{ color: 'var(--text-primary)' }}>Extracting media files...</span>
-            <span style={{ color: 'var(--text-secondary)' }}>{Math.round(extractProgress)}%</span>
-          </div>
-          <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-            <div className="h-2 rounded-full bg-blue-500 transition-all" style={{ width: `${extractProgress}%` }} />
-          </div>
+        <div className="card p-4">
+          <ProgressIndicator
+            percent={extractProgress.percent}
+            message={extractProgress.message || 'Extracting media files…'}
+            isRunning={extracting}
+            showElapsed
+            bytes={extractProgress.bytes}
+            totalBytes={extractProgress.totalBytes}
+            speed={extractProgress.speed}
+            eta={extractProgress.eta}
+            filesCount={extractProgress.filesCount}
+            totalFiles={extractProgress.totalFiles}
+          />
         </div>
       )}
 
@@ -406,10 +404,10 @@ export const IosPhotos: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(photo.dateTaken).toLocaleDateString()}{' '}
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(photo.dateTaken).toLocaleTimeString()}</span>
+                      {fmtDate(photo.dateTaken)}{' '}
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtTime(photo.dateTaken)}</span>
                       {photo.dateTaken !== photo.dateModified && (
-                        <div className="text-xs text-yellow-400 flex items-center gap-1"><Clock size={10} /> Modified: {new Date(photo.dateModified).toLocaleDateString()}</div>
+                        <div className="text-xs text-yellow-400 flex items-center gap-1"><Clock size={10} /> Modified: {fmtDate(photo.dateModified)}</div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -516,9 +514,9 @@ export const IosPhotos: React.FC = () => {
 
                 <h4 className="font-medium pt-2" style={{ color: 'var(--text-secondary)' }}>Dates</h4>
                 {[
-                  { label: 'Date Taken', value: new Date(selectedPhoto.dateTaken).toLocaleString() },
-                  { label: 'Date Created', value: new Date(selectedPhoto.dateCreated).toLocaleString() },
-                  { label: 'Date Modified', value: new Date(selectedPhoto.dateModified).toLocaleString() },
+                  { label: 'Date Taken', value: fmtDateTime(selectedPhoto.dateTaken) },
+                  { label: 'Date Created', value: fmtDateTime(selectedPhoto.dateCreated) },
+                  { label: 'Date Modified', value: fmtDateTime(selectedPhoto.dateModified) },
                 ].map((r) => (
                   <div key={r.label} className="flex justify-between py-0.5" style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>{r.label}</span>

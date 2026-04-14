@@ -290,7 +290,7 @@ export async function extractMessages(
 
     return { messages: normalized, total: countRow.cnt };
   } catch (err) {
-    return { messages: [], total: 0, error: (err as Error).message };
+    return { messages: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -342,7 +342,7 @@ export async function extractCallHistory(
 
     return { calls: normalized, total: countRow.cnt };
   } catch (err) {
-    return { calls: [], total: 0, error: (err as Error).message };
+    return { calls: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -416,7 +416,7 @@ export async function extractContacts(
 
     return { contacts: enriched, total: enriched.length };
   } catch (err) {
-    return { contacts: [], total: 0, error: (err as Error).message };
+    return { contacts: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -479,7 +479,85 @@ export async function extractPhotos(
 
     return { assets: normalized, total: countRow.cnt };
   } catch (err) {
-    return { assets: [], total: 0, error: (err as Error).message };
+    return { assets: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
+  }
+}
+
+/**
+ * Copy actual photo/video files out of the backup hashed tree to a readable folder.
+ * Files are named with their original filename and organized by date (YYYY-MM/).
+ * Returns count of files copied and any errors.
+ */
+export async function copyPhotosToFolder(
+  backupDir: string,
+  outputDir: string,
+  onProgress?: (copied: number, total: number) => void
+): Promise<{ copied: number; skipped: number; total: number; error?: string }> {
+  const manifestPath = path.join(backupDir, 'Manifest.db');
+  try {
+    await fs.access(manifestPath);
+  } catch {
+    return { copied: 0, skipped: 0, total: 0, error: 'Manifest.db not found' };
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Database = require('better-sqlite3');
+    const db = new Database(manifestPath, { readonly: true });
+
+    // Query all media files from CameraRollDomain
+    const rows = db.prepare(`
+      SELECT fileID, relativePath
+      FROM Files
+      WHERE domain IN ('CameraRollDomain', 'MediaDomain')
+        AND (
+          relativePath LIKE '%.jpg' OR relativePath LIKE '%.jpeg' OR
+          relativePath LIKE '%.png' OR relativePath LIKE '%.heic' OR
+          relativePath LIKE '%.heif' OR relativePath LIKE '%.gif' OR
+          relativePath LIKE '%.mp4' OR relativePath LIKE '%.mov' OR
+          relativePath LIKE '%.m4v' OR relativePath LIKE '%.3gp' OR
+          relativePath LIKE '%.aae' OR relativePath LIKE '%.tiff'
+        )
+    `).all() as Array<{ fileID: string; relativePath: string }>;
+    db.close();
+
+    const total = rows.length;
+    let copied = 0;
+    let skipped = 0;
+
+    await fs.mkdir(outputDir, { recursive: true });
+
+    for (const row of rows) {
+      const srcPath = path.join(backupDir, row.fileID.substring(0, 2), row.fileID);
+      // Preserve original filename; use flat structure for cross-platform compatibility
+      const originalName = path.basename(row.relativePath);
+      const destPath = path.join(outputDir, originalName);
+
+      try {
+        await fs.access(srcPath);
+        // Avoid overwriting — append fileID prefix if name collides
+        let finalDest = destPath;
+        try {
+          await fs.access(finalDest);
+          const ext = path.extname(originalName);
+          const base = path.basename(originalName, ext);
+          finalDest = path.join(outputDir, `${base}_${row.fileID.substring(0, 8)}${ext}`);
+        } catch { /* dest doesn't exist, use as-is */ }
+
+        await fs.copyFile(srcPath, finalDest);
+        copied++;
+      } catch {
+        skipped++;
+      }
+
+      if (onProgress && (copied + skipped) % 10 === 0) {
+        onProgress(copied + skipped, total);
+      }
+    }
+
+    return { copied, skipped, total };
+  } catch (err) {
+    return { copied: 0, skipped: 0, total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -528,7 +606,7 @@ export async function extractSafariHistory(
 
     return { history: normalized, bookmarks: [], total: normalized.length };
   } catch (err) {
-    return { history: [], bookmarks: [], total: 0, error: (err as Error).message };
+    return { history: [], bookmarks: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -586,7 +664,7 @@ export async function extractNotes(
 
     return { notes: normalized, total: normalized.length };
   } catch (err) {
-    return { notes: [], total: 0, error: (err as Error).message };
+    return { notes: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -635,7 +713,7 @@ export async function extractVoicemail(
 
     return { voicemails: normalized, total: normalized.length };
   } catch (err) {
-    return { voicemails: [], total: 0, error: (err as Error).message };
+    return { voicemails: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -699,7 +777,7 @@ export async function extractHealthData(
     const allSamples = [...norm(samples as Array<Record<string, unknown>>), ...norm(catSamples as Array<Record<string, unknown>>)];
     return { categories: [], samples: allSamples, total: allSamples.length };
   } catch (err) {
-    return { categories: [], samples: [], total: 0, error: (err as Error).message };
+    return { categories: [], samples: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -730,7 +808,7 @@ export async function extractScreenTime(
 
     return { usage: tables.map((t) => ({ table: t.name })), total: tables.length };
   } catch (err) {
-    return { usage: [], total: 0, error: (err as Error).message };
+    return { usage: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -927,7 +1005,7 @@ export async function recoverDeletedData(
     db.close();
     return { recovered, total: recovered.length };
   } catch (err) {
-    return { recovered: [], total: 0, error: (err as Error).message };
+    return { recovered: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -964,7 +1042,7 @@ export async function browseBackupFiles(
 
     return { files, total: countRow.cnt };
   } catch (err) {
-    return { files: [], total: 0, error: (err as Error).message };
+    return { files: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -1178,7 +1256,7 @@ export async function extractLocationAccessLogs(
     entries.sort((a, b) => b.lastAccessTime - a.lastAccessTime);
     return { entries, total: entries.length };
   } catch (err) {
-    return { entries: [], total: 0, error: (err as Error).message };
+    return { entries: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -1245,6 +1323,6 @@ export async function extractNetworkTrace(
     deduped.sort((a, b) => (b.lastJoined ?? 0) - (a.lastJoined ?? 0));
     return { networks: deduped, total: deduped.length };
   } catch (err) {
-    return { networks: [], total: 0, error: (err as Error).message };
+    return { networks: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }

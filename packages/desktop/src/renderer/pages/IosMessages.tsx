@@ -21,7 +21,8 @@ import {
   Check,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -71,6 +72,7 @@ export const IosMessages: React.FC = () => {
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [filteredMessages, setFilteredMessages] = useState<MessageRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [stats, setStats] = useState<MessageStats | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,30 +87,23 @@ export const IosMessages: React.FC = () => {
   const [selectedMessage, setSelectedMessage] = useState<MessageRecord | null>(null);
   const pageSize = 50;
 
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, {
-        title: 'Select iOS Backup Folder',
-      });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
-
   const handleExtract = async () => {
     if (!backupPath) return;
     setLoading(true);
     setMessages([]);
     setStats(null);
+    setExtractError(null);
     try {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_MESSAGES_EXTRACT, {
         backupPath,
         includeDeleted: true,
         recoverFromWAL: true,
-      }) as { messages: MessageRecord[]; stats: MessageStats };
-      setMessages(result.messages);
+      }) as { messages: MessageRecord[]; stats: MessageStats; error?: string };
+      if (result.error) setExtractError(result.error);
+      setMessages(result.messages ?? []);
       setStats(result.stats);
     } catch (err) {
-      console.error('Message extraction failed:', err);
+      setExtractError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -207,31 +202,27 @@ export const IosMessages: React.FC = () => {
         icon={<Apple size={24} />}
       />
 
+      {extractError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-2 text-sm text-red-400">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>{extractError}</span>
+        </div>
+      )}
+
       {/* Source Selection */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-              iOS Backup Source
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={backupPath}
-                readOnly
-                placeholder="Select iOS backup folder..."
-                className="input-field flex-1"
-                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-              />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading}>
-                Browse
-              </button>
-            </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading}
+          />
+          <div className="flex justify-end">
+            <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Extracting...' : 'Extract Messages'}
+            </button>
           </div>
-          <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <MessageSquare size={16} className="mr-2" />}
-            {loading ? 'Extracting...' : 'Extract Messages'}
-          </button>
         </div>
       </div>
 
@@ -394,9 +385,9 @@ export const IosMessages: React.FC = () => {
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(msg.date).toLocaleDateString()}<br />
+                      {fmtDate(msg.date)}<br />
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(msg.date).toLocaleTimeString()}
+                        {fmtTime(msg.date)}
                       </span>
                     </td>
                     <td className="px-3 py-2">
@@ -487,7 +478,7 @@ export const IosMessages: React.FC = () => {
                 { label: 'GUID', value: selectedMessage.guid },
                 { label: 'Sender', value: `${selectedMessage.senderName} (${selectedMessage.sender})` },
                 { label: 'Recipient', value: `${selectedMessage.recipientName} (${selectedMessage.recipient})` },
-                { label: 'Date', value: new Date(selectedMessage.date).toLocaleString() },
+                { label: 'Date', value: fmtDateTime(selectedMessage.date) },
                 { label: 'Type', value: selectedMessage.type },
                 { label: 'Direction', value: selectedMessage.direction },
                 { label: 'Read', value: selectedMessage.readStatus ? 'Yes' : 'No' },
@@ -522,7 +513,7 @@ export const IosMessages: React.FC = () => {
               {selectedMessage.isDeleted && selectedMessage.deletedDate && (
                 <div className="flex gap-4">
                   <span className="w-28 flex-shrink-0 font-medium text-red-400">Deleted Date</span>
-                  <span className="text-red-400">{new Date(selectedMessage.deletedDate).toLocaleString()}</span>
+                  <span className="text-red-400">{fmtDateTime(selectedMessage.deletedDate)}</span>
                 </div>
               )}
             </div>

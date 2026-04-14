@@ -8,3 +8,9 @@ Thumbs.db
 
 # Isolated development worktrees
 .worktrees/
+
+# Deploy credentials
+deploy.config
+
+# Release artifacts (built DMGs and zips — rebuildable, large)
+release-output/

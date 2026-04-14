@@ -20,9 +20,11 @@ import {
   Image,
   UserPlus,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -90,6 +92,7 @@ export const IosContacts: React.FC = () => {
   const [filteredContacts, setFilteredContacts] = useState<ContactRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterHasPhone, setFilterHasPhone] = useState(false);
   const [filterHasEmail, setFilterHasEmail] = useState(false);
@@ -99,26 +102,19 @@ export const IosContacts: React.FC = () => {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const pageSize = 50;
 
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, {
-        title: 'Select iOS Backup Folder',
-      });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
-
   const handleExtract = async () => {
     if (!backupPath) return;
     setLoading(true);
     setContacts([]);
+    setExtractError(null);
     try {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_CONTACTS_EXTRACT, {
         backupPath,
-      }) as { contacts: ContactRecord[] };
-      setContacts(result.contacts);
+      }) as { contacts: ContactRecord[]; error?: string };
+      if (result.error) setExtractError(result.error);
+      setContacts(result.contacts ?? []);
     } catch (err) {
-      console.error('Contact extraction failed:', err);
+      setExtractError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -203,29 +199,27 @@ export const IosContacts: React.FC = () => {
         icon={<Apple size={24} />}
       />
 
+      {extractError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-2 text-sm text-red-400">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>{extractError}</span>
+        </div>
+      )}
+
       {/* Source Selection */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-              iOS Backup Source
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={backupPath}
-                readOnly
-                placeholder="Select iOS backup folder..."
-                className="input-field flex-1"
-                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-              />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading}>Browse</button>
-            </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading}
+          />
+          <div className="flex justify-end">
+            <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Extracting...' : 'Extract Contacts'}
+            </button>
           </div>
-          <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Users size={16} className="mr-2" />}
-            {loading ? 'Extracting...' : 'Extract Contacts'}
-          </button>
         </div>
       </div>
 
@@ -559,8 +553,8 @@ export const IosContacts: React.FC = () => {
               {/* Metadata */}
               <div className="pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
                 <div className="flex gap-6 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <span>Created: {new Date(selectedContact.createdDate).toLocaleString()}</span>
-                  <span>Modified: {new Date(selectedContact.modifiedDate).toLocaleString()}</span>
+                  <span>Created: {fmtDateTime(selectedContact.createdDate)}</span>
+                  <span>Modified: {fmtDateTime(selectedContact.modifiedDate)}</span>
                   <span>Photo: {selectedContact.hasPhoto ? 'Yes' : 'No'}</span>
                 </div>
               </div>

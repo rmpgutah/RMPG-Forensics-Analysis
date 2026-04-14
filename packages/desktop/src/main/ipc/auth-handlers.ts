@@ -22,7 +22,7 @@ export function registerAuthHandlers(): void {
     return loginWithTrust(username, password, deviceToken);
   });
 
-  ipcMain.handle('auth:trust-device', (_e, username: string) => {
+  ipcMain.handle(IPC_CHANNELS.AUTH_TRUST_DEVICE, (_e, username: string) => {
     return trustDevice(username);
   });
 

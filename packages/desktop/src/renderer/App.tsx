@@ -3,21 +3,34 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './layouts/AppLayout';
 import { LoginScreen } from './pages/LoginScreen';
 import { useAuthStore } from './store';
+import { useSettingsStore } from './store/settings-store';
+import { ShortcutsModal } from './components/common';
 
 // Error boundary to prevent page crashes from killing the entire app
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: string }> {
-  state = { hasError: false, error: '' };
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: string; stack: string }> {
+  state = { hasError: false, error: '', stack: '' };
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error: error.message };
+  }
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error('[ErrorBoundary] Caught error:', error);
+    console.error('[ErrorBoundary] Component stack:', info.componentStack);
+    this.setState({ stack: info.componentStack });
   }
   render() {
     if (this.state.hasError) {
       return (
         <div className="flex h-full items-center justify-center p-8">
-          <div className="card max-w-md text-center">
+          <div className="card max-w-2xl w-full text-center">
             <h2 className="mb-2 text-lg font-bold text-red-400">Page Error</h2>
             <p className="mb-4 text-sm" style={{ color: 'var(--text-muted)' }}>{this.state.error}</p>
-            <button onClick={() => { this.setState({ hasError: false }); window.location.hash = '#/'; }} className="btn-primary">
+            {this.state.stack && (
+              <pre className="mb-4 max-h-48 overflow-auto rounded p-2 text-left text-[10px]"
+                style={{ background: 'rgba(0,0,0,0.3)', color: '#f87171', whiteSpace: 'pre-wrap' }}>
+                {this.state.stack.trim()}
+              </pre>
+            )}
+            <button onClick={() => { this.setState({ hasError: false, stack: '' }); window.location.hash = '#/'; }} className="btn-primary">
               Return to Dashboard
             </button>
           </div>
@@ -78,6 +91,7 @@ import { IosScreenTime } from './pages/IosScreenTime';
 import { IosIntelligence } from './pages/IosIntelligence';
 
 // Analysis
+import { ForensicAgent } from './pages/ForensicAgent';
 import { IpedIntegration } from './pages/IpedIntegration';
 import { OcrProcessing } from './pages/OcrProcessing';
 import { ScreenCapture } from './pages/ScreenCapture';
@@ -164,6 +178,29 @@ const UpdateBanner: React.FC = () => {
 
 const App: React.FC = () => {
   const { isLoggedIn, loading, checkStatus } = useAuthStore();
+  const { preferences } = useSettingsStore();
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Apply theme class to <html> element whenever preference changes
+  useEffect(() => {
+    const html = document.documentElement;
+    if (preferences.theme === 'light') {
+      html.classList.add('theme-light');
+    } else {
+      html.classList.remove('theme-light');
+    }
+  }, [preferences.theme]);
+
+  // Global '?' key opens shortcuts modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === '?') setShowShortcuts((v) => !v);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     checkStatus();
@@ -178,12 +215,17 @@ const App: React.FC = () => {
   }
 
   if (!isLoggedIn) {
-    return <LoginScreen />;
+    return (
+      <ErrorBoundary>
+        <LoginScreen />
+      </ErrorBoundary>
+    );
   }
 
   return (
     <ErrorBoundary>
     <UpdateBanner />
+    {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     <HashRouter>
       <Routes>
         <Route element={<AppLayout />}>
@@ -237,6 +279,7 @@ const App: React.FC = () => {
           <Route path="/ios/intelligence" element={<IosIntelligence />} />
 
           {/* Analysis */}
+          <Route path="/analysis/ai-agent" element={<ForensicAgent />} />
           <Route path="/analysis/iped" element={<IpedIntegration />} />
           <Route path="/analysis/ocr" element={<OcrProcessing />} />
           <Route path="/analysis/screen-capture" element={<ScreenCapture />} />

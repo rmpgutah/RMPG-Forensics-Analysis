@@ -121,7 +121,7 @@ export const ImageFinder: React.FC = () => {
               `"${r.filename}","${r.path}","${r.hash}",${r.size},"${r.width}x${r.height}","${r.dateTaken ?? ''}","${r.cameraMake ?? ''} ${r.cameraModel ?? ''}",${r.latitude ?? ''},${r.longitude ?? ''}`
           ),
         ].join('\n');
-        await ipc.invoke('fs:write-file', savePath, csv);
+        await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, csv);
         addLog(`Exported ${results.length} results to CSV.`);
       }
     } catch {
@@ -155,7 +155,7 @@ export const ImageFinder: React.FC = () => {
         icon={<ImageIcon size={24} />}
       />
       <div className="flex items-center">
-        <span className="badge bg-yellow-100 text-yellow-700 text-[10px]">BETA</span>
+        <span className="badge text-yellow-400 text-[10px]" style={{ background: 'rgba(234,179,8,0.12)' }}>BETA</span>
       </div>
 
       {/* Search configuration */}
@@ -396,7 +396,7 @@ export const ImageFinder: React.FC = () => {
                       key={img.id}
                       onClick={() => setSelectedImage(img)}
                       className={`cursor-pointer hover:bg-[var(--bg-hover)] ${
-                        selectedImage?.id === img.id ? 'bg-blue-50' : ''
+                        selectedImage?.id === img.id ? 'bg-[rgba(100,149,237,0.12)]' : ''
                       }`}
                     >
                       <td className="px-3 py-2 text-xs font-medium text-[var(--text-primary)] truncate max-w-[200px]">

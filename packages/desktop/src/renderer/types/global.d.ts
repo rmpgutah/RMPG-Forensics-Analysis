@@ -41,12 +41,8 @@ export interface ElectronAPI {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void;
   removeListener: (channel: string, callback: (...args: unknown[]) => void) => void;
-  platform: string;
-  openDialog: (options: {
-    type: 'file' | 'folder';
-    filters?: { name: string; extensions: string[] }[];
-    multiple?: boolean;
-  }) => Promise<string[] | null>;
+  removeAllListeners: (channel: string) => void;
+  platform: NodeJS.Platform;
 }
 
 declare global {

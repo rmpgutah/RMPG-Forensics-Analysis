@@ -8,3 +8,6 @@ export { PlatformGuard } from './PlatformGuard';
 export { ConfirmDialog } from './ConfirmDialog';
 export { DeviceSelector } from './DeviceSelector';
 export { DeviceStatus } from './DeviceStatus';
+export { IosDeviceBar } from './IosDeviceBar';
+export { BackgroundTaskBar } from './BackgroundTaskBar';
+export { ShortcutsModal } from './ShortcutsModal';

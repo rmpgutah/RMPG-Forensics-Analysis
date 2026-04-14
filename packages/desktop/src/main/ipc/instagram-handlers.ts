@@ -46,7 +46,7 @@ export function registerInstagramHandlers(): void {
         downloadComments = false,
         postFilter,
       } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, LogIn, UserPlus, KeyRound, Smartphone } from 'lucide-react';
 import QRCodeLib from 'qrcode';
+import { IPC_CHANNELS, APP_VERSION } from '@rmpg/shared';
 import { useAuthStore } from '../store';
 
 function QRCode({ value, size = 200 }: { value: string; size?: number }) {
@@ -126,7 +127,7 @@ export const LoginScreen: React.FC = () => {
     } else if (rememberDevice && currentUser) {
       // Save trust token so 2FA isn't required next time
       try {
-        const trustResult = await window.api.invoke('auth:trust-device', currentUser) as { token: string };
+        const trustResult = await window.api.invoke(IPC_CHANNELS.AUTH_TRUST_DEVICE, currentUser) as { token: string };
         if (trustResult?.token) {
           localStorage.setItem(`rmpg_trust_${currentUser}`, trustResult.token);
         }
@@ -348,7 +349,7 @@ export const LoginScreen: React.FC = () => {
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          RMPG Forensics Analysis v1.0.0
+          {`RMPG Forensics Analysis v${APP_VERSION}`}
         </p>
       </div>
     </div>

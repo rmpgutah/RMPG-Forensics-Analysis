@@ -1,7 +1,8 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, globalShortcut } from 'electron';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 import { is } from '@electron-toolkit/utils';
+import { autoUpdater } from 'electron-updater';
 import { registerAllIpcHandlers } from './ipc';
 
 // Fix PATH for macOS — packaged Electron apps don't inherit shell PATH
@@ -37,6 +38,10 @@ function createWindow(): void {
     mainWindow?.show();
   });
 
+  // Fallback: always show the window after 3s even if ready-to-show never fires
+  // (can happen when renderer crashes before first paint)
+  setTimeout(() => { if (mainWindow && !mainWindow.isVisible()) mainWindow.show(); }, 3000);
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
     return { action: 'deny' };
@@ -47,11 +52,59 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+
+  // Cmd+Option+I / F12 opens DevTools in packaged builds for diagnostics
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    if ((input.meta && input.alt && input.key === 'i') || input.key === 'F12') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
+}
+
+function setupAutoUpdater(): void {
+  // Only run auto-update in packaged builds
+  if (is.dev) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('update:available', { version: info.version });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('update:download-progress', {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('update:downloaded', { version: info.version });
+  });
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('update:error', { message: err.message });
+  });
+
+  // Check for updates once the window is shown, then every 4 hours
+  app.once('browser-window-show', () => {
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+  });
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+
+  // Allow renderer to trigger install
+  ipcMain.handle('update:install-now', () => {
+    autoUpdater.quitAndInstall(false, true);
+  });
 }
 
 app.whenReady().then(() => {
   registerAllIpcHandlers();
   createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

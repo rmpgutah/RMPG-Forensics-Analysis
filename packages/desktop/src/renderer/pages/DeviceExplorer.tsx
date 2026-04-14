@@ -319,7 +319,7 @@ export const DeviceExplorer: React.FC = () => {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-500/40 p-3 text-sm text-red-400" style={{ background: 'rgba(239,68,68,0.1)' }}>
               {error}
             </div>
           )}
@@ -351,8 +351,8 @@ export const DeviceExplorer: React.FC = () => {
                 sortedEntries.map((entry) => (
                   <div
                     key={entry.name}
-                    className={`grid grid-cols-[auto_1fr_100px_160px_100px] gap-2 items-center px-4 py-2 text-sm border-b border-[var(--border-color)] hover:bg-[#F0F0FF] cursor-pointer transition-colors ${
-                      selectedEntries.has(entry.name) ? 'bg-blue-50' : ''
+                    className={`grid grid-cols-[auto_1fr_100px_160px_100px] gap-2 items-center px-4 py-2 text-sm border-b border-[var(--border-color)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors ${
+                      selectedEntries.has(entry.name) ? 'bg-[rgba(100,149,237,0.12)]' : ''
                     }`}
                   >
                     <div className="w-6">

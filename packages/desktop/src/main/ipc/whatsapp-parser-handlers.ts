@@ -26,7 +26,7 @@ export function registerWhatsAppParserHandlers(): void {
       }
     ) => {
       const { dbPath, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -112,7 +112,7 @@ export function registerWhatsAppParserHandlers(): void {
       }
     ) => {
       const { dbPath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -178,7 +178,7 @@ export function registerWhatsAppParserHandlers(): void {
       }
     ) => {
       const { dbPath, outputPath, title, legacy } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

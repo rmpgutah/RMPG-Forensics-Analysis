@@ -23,6 +23,9 @@ import {
   FolderOpen,
   RefreshCw,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  HardDrive,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import { PageHeader, FolderPicker, ProgressIndicator } from '../components/common';
@@ -69,6 +72,55 @@ interface ModuleResult {
 
 type Mode = 'device' | 'backup';
 
+// ─── Error parsing ─────────────────────────────────────────────────────────
+// mobilebackup2 embeds status in the raw stdout. Extract the key line and
+// map known error codes to actionable messages so users don't have to read
+// the raw protocol log.
+const BACKUP_ERROR_MAP: Record<number, { summary: string; action: string }> = {
+  105: {
+    summary: 'Not enough disk space at the destination.',
+    action:  'Free up space on the target drive, or choose a different output folder with more available storage.',
+  },
+  3: {
+    summary: 'Connection to the device was lost.',
+    action:  'Keep the device plugged in during backup. Make sure the screen stays on and the device stays unlocked.',
+  },
+  6: {
+    summary: 'Device is locked or requires passcode entry.',
+    action:  'Unlock the device and tap "Trust This Computer" when prompted, then try again.',
+  },
+  19: {
+    summary: 'Device reported an unknown internal error.',
+    action:  'Restart the device and try again. If the problem persists, try an unencrypted backup.',
+  },
+  21: {
+    summary: 'Backup password mismatch.',
+    action:  'The device has an existing encrypted backup with a different password. Enter the correct password or disable backup encryption on the device in iTunes/Finder.',
+  },
+};
+
+function parseBackupError(raw: string): { headline: string; action?: string; code?: number; detail: string } {
+  // Extract "ErrorCode NNN: message" line if present
+  const codeMatch = raw.match(/ErrorCode\s+(\d+):[^\n.]*/i);
+  const code = codeMatch ? parseInt(codeMatch[1], 10) : undefined;
+
+  // Extract "Backup Failed (Error Code NNN)" line
+  const failMatch = raw.match(/Backup Failed[^\n.]*/i);
+  const detail = raw.trim();
+
+  const known = code !== undefined ? BACKUP_ERROR_MAP[code] : undefined;
+  if (known) {
+    return { headline: known.summary, action: known.action, code, detail };
+  }
+
+  // Fall back to the explicit error line or a generic message
+  const headline = codeMatch
+    ? codeMatch[0].replace(/ErrorCode\s+\d+:\s*/i, '').trim() || failMatch?.[0] || 'Backup failed.'
+    : failMatch?.[0] || 'Backup failed.';
+
+  return { headline, code, detail };
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const IosQuickExtract: React.FC = () => {
@@ -83,6 +135,7 @@ export const IosQuickExtract: React.FC = () => {
   const [running, setRunning] = useState(false);
   const { task: backupTask, startBackup, reset: resetBackup } = useBackupStore();
   const [backupPhaseLabel, setBackupPhaseLabel] = useState('');
+  const [showErrorDetail, setShowErrorDetail] = useState(false);
 
   // Auto-select first device
   useEffect(() => {
@@ -163,7 +216,9 @@ export const IosQuickExtract: React.FC = () => {
 
           const result = await window.api.invoke(mod.channel, payload) as Record<string, unknown>;
           const raw = mod.countKey ? result?.[mod.countKey] : undefined;
-          const count = Array.isArray(raw) ? raw.length : (typeof raw === 'number' ? raw : undefined);
+          const count = typeof result?.copied === 'number'
+            ? result.copied  // prefer "files copied" count for photos
+            : Array.isArray(raw) ? raw.length : (typeof raw === 'number' ? raw : undefined);
 
           setModuleResult(mod.id, {
             status: result?.error ? 'error' : 'done',
@@ -184,6 +239,8 @@ export const IosQuickExtract: React.FC = () => {
   const handleExtract = async () => {
     setRunning(true);
     setResults({});
+    setBackupPhaseLabel('');
+    resetBackup();
 
     try {
       if (mode === 'device') {
@@ -214,12 +271,96 @@ export const IosQuickExtract: React.FC = () => {
   const handleExportAll = async () => {
     if (!outputFolder) return;
     const doneModules = MODULES.filter((m) => results[m.id]?.status === 'done' && results[m.id]?.data);
+    const reportDir = `${outputFolder}/RMPG-Report`;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+
+    // Write per-module CSV + JSON, collect HTML sections
+    const sections: string[] = [];
     for (const mod of doneModules) {
-      try {
-        const json = JSON.stringify(results[mod.id]?.data, null, 2);
-        await window.api.invoke(IPC_CHANNELS.FILE_WRITE, `${outputFolder}/${mod.id}.json`, json);
-      } catch { /* continue */ }
+      const data = results[mod.id]?.data as Record<string, unknown>;
+      if (!data) continue;
+
+      // Find the first array in the result (the records)
+      const arrayKey = Object.keys(data).find((k) => Array.isArray(data[k]));
+      const rows = arrayKey ? (data[arrayKey] as Record<string, unknown>[]) : [];
+
+      // Write JSON
+      await window.api.invoke(IPC_CHANNELS.FILE_WRITE, `${reportDir}/${mod.id}.json`, JSON.stringify(data, null, 2)).catch(() => {});
+
+      // Write CSV if there are rows
+      if (rows.length > 0) {
+        const headers = Object.keys(rows[0]);
+        const csvLines = [
+          headers.join(','),
+          ...rows.map((row) =>
+            headers.map((h) => {
+              const val = row[h] == null ? '' : String(row[h]);
+              return val.includes(',') || val.includes('"') || val.includes('\n')
+                ? `"${val.replace(/"/g, '""')}"`
+                : val;
+            }).join(',')
+          ),
+        ];
+        await window.api.invoke(IPC_CHANNELS.FILE_WRITE, `${reportDir}/${mod.id}.csv`, csvLines.join('\n')).catch(() => {});
+      }
+
+      // Build HTML table section
+      const tableRows = rows.slice(0, 500).map((row) =>
+        `<tr>${Object.values(row).map((v) => `<td>${v == null ? '' : String(v).replace(/</g, '&lt;')}</td>`).join('')}</tr>`
+      ).join('');
+      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+      sections.push(`
+        <section id="${mod.id}">
+          <h2>${mod.label} <span class="count">${rows.length.toLocaleString()} records</span></h2>
+          ${rows.length === 0
+            ? '<p class="empty">No records found.</p>'
+            : `<div class="table-wrap"><table>
+                <thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead>
+                <tbody>${tableRows}</tbody>
+               </table>${rows.length > 500 ? `<p class="note">Showing first 500 of ${rows.length.toLocaleString()} records. See ${mod.id}.json for full data.</p>` : ''}</div>`}
+        </section>`);
     }
+
+    // Write master HTML report
+    const nav = doneModules.map((m) => `<a href="#${m.id}">${m.label}</a>`).join('');
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RMPG Forensics Report — ${ts}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0f1117;color:#e2e8f0;line-height:1.5}
+  header{background:#1a1f2e;padding:20px 32px;border-bottom:1px solid #2d3748}
+  header h1{font-size:1.4rem;color:#6495ED}header p{font-size:.85rem;color:#718096;margin-top:4px}
+  nav{background:#141924;padding:12px 32px;display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid #2d3748;position:sticky;top:0;z-index:10}
+  nav a{color:#6495ED;text-decoration:none;font-size:.85rem;padding:4px 10px;border-radius:4px;background:rgba(100,149,237,.1)}
+  nav a:hover{background:rgba(100,149,237,.2)}
+  main{padding:32px;max-width:1400px;margin:0 auto}
+  section{margin-bottom:48px}
+  section h2{font-size:1.1rem;color:#e2e8f0;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #2d3748}
+  .count{font-size:.75rem;color:#718096;font-weight:400;margin-left:8px}
+  .table-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.8rem}
+  th{background:#1a1f2e;color:#a0aec0;padding:8px 12px;text-align:left;position:sticky;top:48px;white-space:nowrap}
+  td{padding:6px 12px;border-bottom:1px solid #1e2433;color:#e2e8f0;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  tr:hover td{background:#1a1f2e}
+  .empty{color:#718096;font-style:italic;padding:16px 0}
+  .note{margin-top:8px;font-size:.75rem;color:#718096}
+</style>
+</head>
+<body>
+<header>
+  <h1>RMPG Forensics Analysis — iOS Extraction Report</h1>
+  <p>Generated: ${new Date().toLocaleString()} · ${doneModules.length} modules extracted</p>
+</header>
+<nav>${nav}</nav>
+<main>${sections.join('\n')}</main>
+</body>
+</html>`;
+
+    await window.api.invoke(IPC_CHANNELS.FILE_WRITE, `${reportDir}/report-${ts}.html`, html).catch(() => {});
   };
 
   const doneCount    = Object.values(results).filter((r) => r.status === 'done').length;
@@ -323,19 +464,62 @@ export const IosQuickExtract: React.FC = () => {
             />
 
             {backupTask && backupTask.status !== 'idle' && !backupTask.dismissed && (
-              <div className="rounded-lg border p-3 space-y-1"
-                style={{ borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
-                <div className="flex items-center gap-2 text-xs font-medium mb-2"
+              <div className="rounded-lg border space-y-2"
+                style={{
+                  borderColor: backupTask.status === 'error' ? 'rgba(239,68,68,0.3)' : 'var(--border-color)',
+                  background: backupTask.status === 'error' ? 'rgba(239,68,68,0.06)' : 'var(--bg-secondary)',
+                  padding: '12px',
+                }}>
+
+                {/* Status header */}
+                <div className="flex items-center gap-2 text-xs font-medium"
                   style={{ color: backupTask.status === 'error' ? '#f87171' : backupTask.status === 'done' ? '#4ade80' : '#6495ED' }}>
                   {backupTask.status === 'running' && <Loader2 size={12} className="animate-spin" />}
                   {backupTask.status === 'done'    && <CheckCircle size={12} />}
                   {backupTask.status === 'error'   && <XCircle size={12} />}
                   <span>
-                    {backupTask.status === 'running' && 'Creating backup (navigating away is safe — backup continues in background)'}
+                    {backupTask.status === 'running' && 'Backing up… (you can navigate away — backup continues in the background)'}
                     {backupTask.status === 'done'    && 'Backup complete — extracting data…'}
-                    {backupTask.status === 'error'   && `Backup error: ${backupTask.error}`}
+                    {backupTask.status === 'error'   && (() => {
+                      const parsed = parseBackupError(backupTask.error ?? '');
+                      return parsed.code !== undefined ? `Error ${parsed.code}: ${parsed.headline}` : parsed.headline;
+                    })()}
                   </span>
                 </div>
+
+                {/* Parsed error details */}
+                {backupTask.status === 'error' && (() => {
+                  const parsed = parseBackupError(backupTask.error ?? '');
+                  return (
+                    <div className="space-y-2">
+                      {parsed.action && (
+                        <div className="flex items-start gap-2 rounded p-2 text-xs"
+                          style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                          {parsed.code === 105
+                            ? <HardDrive size={13} className="text-red-400 mt-0.5 shrink-0" />
+                            : <AlertCircle size={13} className="text-red-400 mt-0.5 shrink-0" />}
+                          <span style={{ color: 'var(--text-secondary)' }}>{parsed.action}</span>
+                        </div>
+                      )}
+                      {/* Collapsible raw output */}
+                      <button
+                        onClick={() => setShowErrorDetail((v) => !v)}
+                        className="flex items-center gap-1 text-[11px] hover:underline"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {showErrorDetail ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        {showErrorDetail ? 'Hide' : 'Show'} technical output
+                      </button>
+                      {showErrorDetail && (
+                        <pre className="rounded p-2 text-[10px] leading-4 overflow-x-auto whitespace-pre-wrap break-all"
+                          style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)', border: '1px solid var(--border-color)', maxHeight: 160 }}>
+                          {parsed.detail}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {backupTask.status === 'running' && (
                   <>
                     <ProgressIndicator
@@ -500,7 +684,7 @@ export const IosQuickExtract: React.FC = () => {
 
         {allDone && outputFolder && (
           <button onClick={handleExportAll} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={14} /> Export All as JSON
+            <Download size={14} /> Export Report (HTML + CSV)
           </button>
         )}
 

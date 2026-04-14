@@ -61,7 +61,9 @@ import {
   Heart,
   Clock,
   Brain,
+  Bot,
 } from 'lucide-react';
+import { APP_VERSION } from '@rmpg/shared';
 
 interface NavItem {
   label: string;
@@ -140,6 +142,7 @@ const navSections: NavSection[] = [
   {
     title: 'Analysis',
     items: [
+      { label: 'Forensic AI Agent', path: '/analysis/ai-agent', icon: <Bot size={16} />, badge: 'AI' },
       { label: 'IPED Integration', path: '/analysis/iped', icon: <Search size={16} /> },
       { label: 'OCR Processing', path: '/analysis/ocr', icon: <ScanLine size={16} /> },
       { label: 'Screen Capture', path: '/analysis/screen-capture', icon: <Camera size={16} /> },
@@ -239,7 +242,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Version footer */}
       <div className="px-4 py-2 text-center text-[10px]" style={{ borderTop: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-        RMPG Forensics Analysis v1.0.0
+        RMPG Forensics Analysis v{APP_VERSION}
       </div>
     </aside>
   );

@@ -77,6 +77,12 @@ export const BulkCopy: React.FC = () => {
           {(process.isRunning || process.progress.percent > 0) && (
             <ProgressIndicator
               percent={process.progress.percent}
+              bytes={process.progress.bytes}
+              totalBytes={process.progress.totalBytes}
+              speed={process.progress.speed}
+              eta={process.progress.eta}
+              filesCount={process.progress.filesCount}
+              totalFiles={process.progress.totalFiles}
               message={process.progress.message}
               isRunning={process.isRunning}
             />

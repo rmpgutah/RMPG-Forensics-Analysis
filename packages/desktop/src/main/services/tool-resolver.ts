@@ -21,9 +21,12 @@ const TOOL_BINARIES: Record<ToolName, { win32: string; posix: string }> = {
   idevice_id:       { win32: 'idevice_id.exe',       posix: 'idevice_id' },
   ideviceinfo:      { win32: 'ideviceinfo.exe',      posix: 'ideviceinfo' },
   ideviceinstaller: { win32: 'ideviceinstaller.exe', posix: 'ideviceinstaller' },
-  scrcpy:           { win32: 'scrcpy.exe',           posix: 'scrcpy' },
-  instaloader:      { win32: 'instaloader.exe',      posix: 'instaloader' },
-  odin:             { win32: 'Odin3.exe',            posix: 'odin' },
+  scrcpy:              { win32: 'scrcpy.exe',              posix: 'scrcpy' },
+  instaloader:         { win32: 'instaloader.exe',         posix: 'instaloader' },
+  odin:                { win32: 'Odin3.exe',               posix: 'odin' },
+  jadx:                { win32: 'jadx.bat',                posix: 'jadx' },
+  idevicescreenshot:   { win32: 'idevicescreenshot.exe',   posix: 'idevicescreenshot' },
+  idevicediagnostics:  { win32: 'idevicediagnostics.exe',  posix: 'idevicediagnostics' },
 };
 
 /**
@@ -159,7 +162,6 @@ async function getToolVersion(toolPath: string, toolName: ToolName): Promise<str
  */
 export async function resolveTool(name: ToolName): Promise<ToolInfo> {
   const platform = getPlatform();
-  const binaryName = getBinaryName(name);
 
   const notFound: ToolInfo = {
     name,
@@ -167,6 +169,11 @@ export async function resolveTool(name: ToolName): Promise<ToolInfo> {
     found: false,
     platform,
   };
+
+  // Guard against unknown tool names (e.g. from older callers)
+  if (!TOOL_BINARIES[name]) return notFound;
+
+  const binaryName = getBinaryName(name);
 
   // 1. Check user-configured path
   const userPaths = await loadUserPaths();

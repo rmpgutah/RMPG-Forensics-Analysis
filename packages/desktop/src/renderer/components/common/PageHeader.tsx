@@ -14,14 +14,20 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actions,
 }) => {
   return (
-    <div className="mb-6 border-b border-slate-700 pb-4">
+    <div className="mb-6 pb-4" style={{ borderBottom: '1px solid var(--border-color)' }}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {icon && <span className="text-blue-400">{icon}</span>}
+          {icon && (
+            <span className="text-[#6495ED]">{icon}</span>
+          )}
           <div>
-            <h1 className="text-2xl font-bold text-white">{title}</h1>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+              {title}
+            </h1>
             {description && (
-              <p className="mt-1 text-sm text-slate-400">{description}</p>
+              <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                {description}
+              </p>
             )}
           </div>
         </div>

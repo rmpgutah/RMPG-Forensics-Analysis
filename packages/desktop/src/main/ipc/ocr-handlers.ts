@@ -35,7 +35,7 @@ export function registerOcrHandlers(): void {
       if (inputPaths.length === 0) {
         throw new Error('No input file specified');
       }
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
