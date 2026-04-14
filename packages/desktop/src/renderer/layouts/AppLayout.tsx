@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
-import { DeviceStatus, BackgroundTaskBar } from '../components/common';
+import { DeviceStatus, BackgroundTaskBar, ErrorBanner, ErrorToast, ErrorModal } from '../components/common';
 import { useCaseStore, useAuthStore, useBackupStore } from '../store';
 import { useSettingsStore } from '../store/settings-store';
 import { useDeviceStatus } from '../hooks';
@@ -148,6 +148,9 @@ export const AppLayout: React.FC = () => {
           </div>
         )}
 
+        {/* Error banners — persistent until dismissed */}
+        <ErrorBanner />
+
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--bg-primary)' }}>
           <Outlet />
@@ -179,6 +182,10 @@ export const AppLayout: React.FC = () => {
             <span>Acquisition Path: {caseName || '—'}</span>
           </div>
         </footer>
+
+        {/* Floating error UIs (z-index handled inside the components) */}
+        <ErrorToast />
+        <ErrorModal />
       </div>
     </div>
   );
