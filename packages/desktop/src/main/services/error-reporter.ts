@@ -45,12 +45,21 @@ export async function reportError(input: ReportInput): Promise<ReportOutcome> {
   const audit = await recordError(event, undefined);
 
   // 2. Broadcast to renderer (best-effort — window may not exist during
-  //    early startup or shutdown).
+  //    early startup or shutdown). Wrapped in try/catch so reportError
+  //    itself never throws when called from inside a catch block: the
+  //    audit log already captured the event regardless of broadcast.
   const win = BrowserWindow.getAllWindows()[0] ?? null;
   let broadcasted = false;
   if (win && !win.isDestroyed()) {
-    win.webContents.send(IPC_CHANNELS.ERROR_REPORT, event);
-    broadcasted = true;
+    try {
+      win.webContents.send(IPC_CHANNELS.ERROR_REPORT, event);
+      broadcasted = true;
+    } catch (err) {
+      // TOCTOU: renderer may have been destroyed between the check and the
+      // send, or webContents rejected the payload.
+      // eslint-disable-next-line no-console
+      console.error('[error-reporter] webContents.send failed', err);
+    }
   }
 
   return { event, audit, broadcasted };
