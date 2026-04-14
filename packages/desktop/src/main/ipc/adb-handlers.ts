@@ -4,6 +4,7 @@ import type { ProcessProgress } from '@rmpg/shared';
 import * as adbService from '../services/adb-service';
 import type { AdbBackupOptions } from '../services/adb-service';
 import * as iosService from '../services/ios-service';
+import { reportError } from '../services/error-reporter';
 
 /**
  * Register ADB operation IPC handlers.
@@ -16,9 +17,23 @@ export function registerAdbHandlers(): void {
   // ADB_LIST_DEVICES - Enumerate connected Android + iOS devices
   // ---------------------------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.ADB_LIST_DEVICES, async () => {
-    const android = await adbService.listDevices();
+    // Android: wrap separately so an ADB failure (binary missing, permissions,
+    // etc.) does NOT take iOS detection down with it. Surface the error via
+    // reportError so the user sees a banner instead of a silent empty list.
+    let android: Awaited<ReturnType<typeof adbService.listDevices>> = [];
+    try {
+      android = await adbService.listDevices();
+    } catch (err) {
+      await reportError({
+        severity: 'error',
+        source: 'adb-handlers.ADB_LIST_DEVICES',
+        message: err instanceof Error ? err.message : String(err),
+        detail: err instanceof Error ? err.stack : undefined,
+        retryable: true,
+      });
+    }
 
-    // Detect iOS devices via ios-service (uses tool resolver for correct path)
+    // iOS: already wrapped (libimobiledevice may be missing).
     let ios: { serial: string; model: string; manufacturer: string; product: string; version: string }[] = [];
     try {
       const iosDevices = await iosService.listDevices();
@@ -29,8 +44,18 @@ export function registerAdbHandlers(): void {
         product: d.productType || '',
         version: d.productVersion || '',
       }));
-    } catch {
-      // libimobiledevice not installed or no iOS devices
+    } catch (err) {
+      // iOS detection silent for the benign "not installed" case (typical
+      // on machines that don't have libimobiledevice). Other failures
+      // surface as a non-blocking warning toast.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/ENOENT|not found|command not found/i.test(msg)) {
+        await reportError({
+          severity: 'warning',
+          source: 'adb-handlers.ADB_LIST_DEVICES.ios',
+          message: msg,
+        });
+      }
     }
 
     return { android, ios };
