@@ -5,6 +5,9 @@ import { LoginScreen } from './pages/LoginScreen';
 import { useAuthStore } from './store';
 import { useSettingsStore } from './store/settings-store';
 import { ShortcutsModal } from './components/common';
+import { IPC_CHANNELS } from '@rmpg/shared';
+import type { ErrorEvent } from '@rmpg/shared';
+import { useErrorStore } from './store/error-store';
 
 // Error boundary to prevent page crashes from killing the entire app
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: string; stack: string }> {
@@ -16,6 +19,23 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     console.error('[ErrorBoundary] Caught error:', error);
     console.error('[ErrorBoundary] Component stack:', info.componentStack);
     this.setState({ stack: info.componentStack });
+    // Audit-log the render error via the central store. We generate the id
+    // and timestamp here because this is purely client-side (no main process
+    // round-trip). The main-process audit log is missed for these — that's
+    // an acceptable gap because the renderer console + store are sufficient
+    // for in-session diagnostics.
+    try {
+      useErrorStore.getState().addError({
+        id: crypto.randomUUID(),
+        severity: 'critical',
+        source: 'react-render',
+        message: error.message,
+        detail: info.componentStack,
+        timestampIso: new Date().toISOString(),
+      });
+    } catch {
+      // Store may not be available during very early render failures; ignore.
+    }
   }
   render() {
     if (this.state.hasError) {
@@ -204,6 +224,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     checkStatus();
+  }, []);
+
+  // Subscribe to main-process error broadcasts
+  useEffect(() => {
+    const off = window.api.on(IPC_CHANNELS.ERROR_REPORT, (event: unknown) => {
+      const e = event as ErrorEvent;
+      console.error(`[${e.source}] ${e.message}`, e);
+      useErrorStore.getState().addError(e);
+    });
+    return off;
   }, []);
 
   if (loading) {
