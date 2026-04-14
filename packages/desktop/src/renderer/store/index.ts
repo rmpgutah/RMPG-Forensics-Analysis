@@ -11,3 +11,5 @@ export { useAuthStore } from './auth-store';
 
 export { useBackupStore } from './backup-store';
 export type { BackupTask, BackupProgress } from './backup-store';
+
+export { useErrorStore } from './error-store';
