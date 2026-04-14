@@ -49,7 +49,14 @@ export function registerAdbHandlers(): void {
       // on machines that don't have libimobiledevice). Other failures
       // surface as a non-blocking warning toast.
       const msg = err instanceof Error ? err.message : String(err);
-      if (!/ENOENT|not found|command not found/i.test(msg)) {
+      // Benign = libimobiledevice not installed (the only case worth silencing).
+      // Match the specific sentinel from getToolPath in ios-service rather than
+      // any "not found" substring, which would swallow real device errors like
+      // "device not found" or "lockdownd: key not found".
+      const isBenignToolMissing = /^(idevice_id|ideviceinfo|idevicebackup2)\s+not\s+found\b/i.test(msg)
+        || /^ENOENT\b/i.test(msg)
+        || /^Error:\s*spawn .* ENOENT$/i.test(msg);
+      if (!isBenignToolMissing) {
         await reportError({
           severity: 'warning',
           source: 'adb-handlers.ADB_LIST_DEVICES.ios',
