@@ -108,8 +108,14 @@ export function useDeviceStatus(pollInterval = 2000) {
 
       knownSerials.current = currentSerials;
       isFirstPoll.current = false;
-    } catch {
-      // Silently fail on poll errors
+    } catch (err) {
+      // Main process already reported via ERROR_REPORT IPC and audit log
+      // (see error-reporter.ts + the migrated adb-handlers ADB_LIST_DEVICES).
+      // Local console output here is for renderer-side debugging only —
+      // do NOT show UI from this catch, the main-process error system is
+      // the single source of truth for user-visible error surfacing.
+      // eslint-disable-next-line no-console
+      console.error('[useDeviceStatus] poll() failed', err);
     }
   }, [invoke, setAndroidDevices, setIosDevices, setLastPollTime, runAutoScan, clearDeviceProfile, addConnectionNotice]);
 
