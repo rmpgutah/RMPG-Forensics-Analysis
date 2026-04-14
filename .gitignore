@@ -5,3 +5,6 @@ out/
 .DS_Store
 Thumbs.db
 *.log
+
+# Isolated development worktrees
+.worktrees/
