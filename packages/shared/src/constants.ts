@@ -17,6 +17,9 @@ export const IPC_CHANNELS = {
   CASE_SAVE_NOTES: 'case:save-notes',
   CASE_EXPORT_PDF: 'case:export-pdf',
 
+  // Error reporting (main -> renderer push)
+  ERROR_REPORT: 'error:report',
+
   // Dialog
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',
   DIALOG_OPEN_FILE: 'dialog:open-file',
