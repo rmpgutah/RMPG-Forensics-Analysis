@@ -13,3 +13,4 @@ export { BackgroundTaskBar } from './BackgroundTaskBar';
 export { ShortcutsModal } from './ShortcutsModal';
 export { ErrorBanner } from './ErrorBanner';
 export { ErrorToast } from './ErrorToast';
+export { ErrorModal } from './ErrorModal';
