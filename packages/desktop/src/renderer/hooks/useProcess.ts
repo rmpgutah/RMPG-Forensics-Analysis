@@ -88,11 +88,23 @@ export function useProcess(options: UseProcessOptions): UseProcessResult {
 
       try {
         addLog('info', `Process started: ${channel}`);
-        await window.api.invoke(channel, ...args);
+        const result = await window.api.invoke(channel, ...args);
 
         if (!cancelledRef.current) {
-          setProgress({ percent: 100, message: 'Complete' });
-          addLog('success', 'Process completed successfully');
+          // Check if the handler returned a failure result instead of throwing
+          if (
+            result &&
+            typeof result === 'object' &&
+            'success' in result &&
+            result.success === false
+          ) {
+            const message = (result as { error?: string }).error || 'Process failed';
+            setError(message);
+            addLog('error', `Process failed: ${message}`);
+          } else {
+            setProgress({ percent: 100, message: 'Complete' });
+            addLog('success', 'Process completed successfully');
+          }
         }
       } catch (err) {
         if (!cancelledRef.current) {
