@@ -11,6 +11,11 @@ import { resolveTool } from '../services/tool-resolver';
 // Helpers
 // ---------------------------------------------------------------------------
 
+function sanitizeShellArg(arg: string): string {
+  // Remove any characters that could enable shell injection
+  return arg.replace(/[;&|`$(){}!#*?<>\\\n\r]/g, '');
+}
+
 function getWindow(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow();
 }
@@ -297,7 +302,7 @@ function registerBruteForceHandlers(): void {
 
               // Send PIN via input command
               try {
-                await adbService.shell(serial, `input text ${pin} && input keyevent 66`);
+                await adbService.shell(serial, `input text '${pin}' && input keyevent 66`);
                 // Small delay to respect device throttling
                 await new Promise((r) => setTimeout(r, 500));
                 // Check if device unlocked by trying to get foreground activity
@@ -405,7 +410,7 @@ print(json.dumps(result))
                 progress(progressCh, Math.round((i / limit) * 85) + 10, `Trying: ${pwd.substring(0, 3)}*** (${i}/${limit})`);
               }
               try {
-                await adbService.shell(serial, `input text '${pwd.replace(/'/g, "\\'")}' && input keyevent 66`);
+                await adbService.shell(serial, `input text '${pwd.replace(/\\/g, '\\\\').replace(/'/g, "'\\''")}' && input keyevent 66`);
                 await new Promise((r) => setTimeout(r, 1000));
                 const activity = await adbService.shell(serial, 'dumpsys window | grep mCurrentFocus');
                 if (!activity.includes('Keyguard') && !activity.includes('Lock')) {
@@ -1307,8 +1312,9 @@ function registerLiveViewHandlers(): void {
     async (_event, options: { serial: string; path: string }) => {
       const { serial, path: dirPath } = options;
       try {
+        const safePath = sanitizeShellArg(dirPath);
         const output = await adbService.shell(serial,
-          `ls -la ${dirPath} 2>/dev/null`
+          `ls -la '${safePath}' 2>/dev/null`
         );
         const files = parseLsOutput(output, dirPath);
         return { success: true, files };
@@ -1324,7 +1330,8 @@ function registerLiveViewHandlers(): void {
       const { serial, path: filePath } = options;
       try {
         // Read file content (limit to 1MB for safety)
-        const content = await adbService.shell(serial, `cat "${filePath}" 2>/dev/null | head -c 1048576`);
+        const safePath = sanitizeShellArg(filePath);
+        const content = await adbService.shell(serial, `cat '${safePath}' 2>/dev/null | head -c 1048576`);
         return { success: true, content };
       } catch (err) {
         return { success: false, error: (err as Error).message };
@@ -1382,7 +1389,8 @@ function registerSelectiveExtractHandlers(): void {
 
         try {
           // Determine if path is file or directory
-          const statOutput = await adbService.shell(serial, `stat -c '%F' "${target.path}" 2>/dev/null || echo "unknown"`);
+          const safePath = sanitizeShellArg(target.path);
+          const statOutput = await adbService.shell(serial, `stat -c '%F' '${safePath}' 2>/dev/null || echo "unknown"`);
           const isDir = statOutput.trim().includes('directory');
 
           if (isDir) {
