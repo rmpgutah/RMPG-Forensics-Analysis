@@ -218,11 +218,11 @@ export const PythonToolkit: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={handleRun}
-              disabled={!target || !outputFolder || process.running}
+              disabled={!target || !outputFolder || process.isRunning}
               className="btn-primary flex items-center gap-2"
             >
               <Play size={14} />
-              {process.running ? 'Running...' : `Run ${selectedToolDef.name}`}
+              {process.isRunning ? 'Running...' : `Run ${selectedToolDef.name}`}
             </button>
             {!toolStatuses[selectedTool]?.installed && (
               <span className="flex items-center gap-1 text-xs text-yellow-400">

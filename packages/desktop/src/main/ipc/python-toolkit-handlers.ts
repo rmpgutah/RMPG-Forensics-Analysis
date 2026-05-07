@@ -239,6 +239,17 @@ function registerToolkitRunHandler(): void {
         return { success: false, error: `Unknown tool: ${toolId}` };
       }
 
+      // Input validation: reject shell metacharacters in target
+      if (/[;&|`$(){}!#*<>\\\n\r]/.test(target)) {
+        return { success: false, error: 'Target contains invalid characters' };
+      }
+      // Validate extraArgs: reject anything that looks like shell injection
+      for (const arg of extraArgs) {
+        if (/[;&|`$(){}!#*<>\\\n\r]/.test(arg)) {
+          return { success: false, error: 'Extra arguments contain invalid characters' };
+        }
+      }
+
       const python = await resolveTool('python');
       if (!python.found) {
         return { success: false, error: 'Python not found' };
