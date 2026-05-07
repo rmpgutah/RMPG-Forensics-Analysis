@@ -61,6 +61,7 @@ import { WhatsAppMerge } from './pages/WhatsAppMerge';
 
 // iOS Collections
 import { IosBackup } from './pages/IosBackup';
+import { IosBackupDecrypt } from './pages/IosBackupDecrypt';
 import { IosFileExtraction } from './pages/IosFileExtraction';
 import { IosMessages } from './pages/IosMessages';
 import { IosCallHistory } from './pages/IosCallHistory';
@@ -88,6 +89,11 @@ import { AcquisitionReport } from './pages/AcquisitionReport';
 import { JadxDecompiler } from './pages/JadxDecompiler';
 import { SqliteBrowser } from './pages/SqliteBrowser';
 import { ExifViewer } from './pages/ExifViewer';
+
+// Breach & Bypass
+import { LockScreenRecovery } from './pages/LockScreenRecovery';
+import { EdlImager } from './pages/EdlImager';
+import { MtkImager } from './pages/MtkImager';
 
 // Settings
 import { ToolConfiguration } from './pages/ToolConfiguration';
@@ -177,6 +183,12 @@ const App: React.FC = () => {
           <Route path="/tools/jadx" element={<JadxDecompiler />} />
           <Route path="/tools/sqlite-browser" element={<SqliteBrowser />} />
           <Route path="/tools/exif-viewer" element={<ExifViewer />} />
+
+          {/* Breach & Bypass */}
+          <Route path="/breach/lock-screen" element={<LockScreenRecovery />} />
+          <Route path="/breach/edl-imager" element={<EdlImager />} />
+          <Route path="/breach/mtk-imager" element={<MtkImager />} />
+          <Route path="/breach/ios-backup-decrypt" element={<IosBackupDecrypt />} />
 
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />
