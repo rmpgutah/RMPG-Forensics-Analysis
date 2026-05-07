@@ -288,6 +288,12 @@ export const IPC_CHANNELS = {
   PEOPLE_SEARCH_PROGRESS: 'people:search-progress',
   PEOPLE_SEARCH_BATCH: 'people:search-batch',
 
+  // Python Security Toolkit (open-source tools integration)
+  TOOLKIT_RUN: 'toolkit:run',
+  TOOLKIT_PROGRESS: 'toolkit:run-progress',
+  TOOLKIT_INSTALL: 'toolkit:install',
+  TOOLKIT_STATUS: 'toolkit:status',
+
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',

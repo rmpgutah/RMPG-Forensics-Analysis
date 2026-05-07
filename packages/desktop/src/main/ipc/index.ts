@@ -26,6 +26,7 @@ import { registerSyncHandlers } from './sync-handlers';
 import { registerAuthHandlers } from './auth-handlers';
 import { registerMissingHandlers } from './missing-handlers';
 import { registerTacticalHandlers } from './tactical-handlers';
+import { registerPythonToolkitHandlers } from './python-toolkit-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -111,6 +112,9 @@ export function registerAllIpcHandlers(): void {
 
   // Advanced tactical systems (decrypt, brute force, breach, spy, compliance, live view)
   registerTacticalHandlers();
+
+  // Python security toolkit (Sherlock, theHarvester, Holehe, Maigret, etc.)
+  registerPythonToolkitHandlers();
 
   // Stub handlers for features not yet fully implemented
   registerMissingHandlers();

@@ -111,6 +111,9 @@ import { PeopleSearch } from './pages/PeopleSearch';
 import { ToolConfiguration } from './pages/ToolConfiguration';
 import { SyncSettings } from './pages/SyncSettings';
 
+// Python Security Toolkit
+import { PythonToolkit } from './pages/PythonToolkit';
+
 const App: React.FC = () => {
   const { isLoggedIn, loading, checkStatus } = useAuthStore();
 
@@ -213,6 +216,7 @@ const App: React.FC = () => {
           <Route path="/breach/website-breach" element={<WebsiteBreach />} />
           <Route path="/breach/pii-polling" element={<PiiPolling />} />
           <Route path="/intel/people-search" element={<PeopleSearch />} />
+          <Route path="/intel/python-toolkit" element={<PythonToolkit />} />
 
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />

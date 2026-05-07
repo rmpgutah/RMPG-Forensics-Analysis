@@ -58,6 +58,7 @@ import {
   Target,
   Users,
   Globe,
+  Terminal,
 } from 'lucide-react';
 
 interface NavItem {
@@ -165,6 +166,7 @@ const navSections: NavSection[] = [
     title: 'Intelligence & Data Collection',
     items: [
       { label: 'People Search', path: '/intel/people-search', icon: <Users size={16} /> },
+      { label: 'Python Security Toolkit', path: '/intel/python-toolkit', icon: <Terminal size={16} /> },
     ],
   },
   {
