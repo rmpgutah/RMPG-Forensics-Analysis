@@ -285,9 +285,7 @@ export const IPC_CHANNELS = {
   // Auth extras
   AUTH_TRUST_DEVICE: 'auth:trust-device',
 
-  // iOS Backup Decrypt
-  IOS_BACKUP_DECRYPT: 'ios:backup-decrypt',
-  IOS_BACKUP_DECRYPT_PROGRESS: 'ios:backup-decrypt-progress',
+  // (IOS_BACKUP_DECRYPT defined above under Breach & Bypass)
 
   // Lock Screen Recovery
   LOCK_SCREEN_RECOVER: 'lock-screen:recover',
