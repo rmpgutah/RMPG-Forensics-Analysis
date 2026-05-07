@@ -89,7 +89,7 @@ const DOWNLOAD_CATALOG: DownloadableApp[] = [
   },
 ];
 
-const activeDownloads = new Map<string, { request: http.ClientRequest; cancelled: boolean }>();
+const activeDownloads = new Map<string, { response: IncomingMessage; cancelled: boolean }>();
 
 function getDownloadsDir(): string {
   const dir = join(app.getPath('userData'), 'downloads');
@@ -170,7 +170,7 @@ export async function startDownload(
   if (activeDownloads.has(downloadId)) {
     const existing = activeDownloads.get(downloadId)!;
     existing.cancelled = true;
-    existing.request.destroy();
+    existing.response.destroy();
     activeDownloads.delete(downloadId);
   }
 
@@ -202,8 +202,8 @@ export async function startDownload(
     let lastBytes = 0;
 
     const fileStream = createWriteStream(destPath);
-    const downloadEntry = { request: response.socket?.destroyed ? null : (response as unknown as http.ClientRequest), cancelled: false };
-    activeDownloads.set(downloadId, downloadEntry as { request: http.ClientRequest; cancelled: boolean });
+    const downloadEntry = { response, cancelled: false };
+    activeDownloads.set(downloadId, downloadEntry);
 
     response.on('data', (chunk: Buffer) => {
       if (downloadEntry.cancelled) {
@@ -296,7 +296,7 @@ export function cancelDownload(appId: string, platform: 'win' | 'mac'): void {
   const entry = activeDownloads.get(downloadId);
   if (entry) {
     entry.cancelled = true;
-    entry.request.destroy();
+    entry.response.destroy();
     activeDownloads.delete(downloadId);
   }
 }
