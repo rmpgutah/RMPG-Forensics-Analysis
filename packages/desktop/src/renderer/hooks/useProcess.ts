@@ -25,7 +25,13 @@ interface UseProcessOptions {
 }
 
 interface UseProcessResult {
-  start: (...args: unknown[]) => Promise<void>;
+  /**
+   * Invoke the IPC channel and return whatever the handler resolved with.
+   * Returns `undefined` if the call threw (the error is also exposed via
+   * `error`). Returning the value lets pages read structured handler output
+   * — e.g. the OCR page binds `result.text` straight to its viewer textarea.
+   */
+  start: (...args: unknown[]) => Promise<unknown>;
   cancel: () => void;
   progress: ProcessState;
   logs: LogLine[];
@@ -108,11 +114,12 @@ export function useProcess(options: UseProcessOptions): UseProcessResult {
 
       try {
         addLog('info', `Process started: ${channel}`);
-        await window.api.invoke(channel, ...args);
+        const result = await window.api.invoke(channel, ...args);
         if (!cancelledRef.current) {
           setProgress((prev) => ({ ...prev, percent: 100, message: 'Complete' }));
           addLog('success', 'Process completed successfully');
         }
+        return result;
       } catch (err) {
         if (!cancelledRef.current) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -120,6 +127,7 @@ export function useProcess(options: UseProcessOptions): UseProcessResult {
           setProgress({ percent: 0, message: '' });
           addLog('error', `Process failed: ${msg}`);
         }
+        return undefined;
       } finally {
         setIsRunning(false);
         cleanupFns.current.forEach((fn) => typeof fn === 'function' && fn());

@@ -217,6 +217,7 @@ export const ExifViewer: React.FC = () => {
               />
             ) : (
               <FolderPicker
+            role="source"
                 label="Image Directory"
                 value={dirPath}
                 onChange={setDirPath}

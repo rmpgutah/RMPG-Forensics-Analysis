@@ -94,6 +94,7 @@ export const FileExtraction: React.FC = () => {
           </div>
 
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}

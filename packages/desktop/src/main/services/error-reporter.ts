@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import type { ErrorEvent } from '@rmpg/shared';
 import { recordError, type AuditLogResult } from './audit-log';
+import { getActiveCaseDir } from './active-case';
 
 /** Input for reportError — id and timestamp are filled in here. */
 export type ReportInput = Omit<ErrorEvent, 'id' | 'timestampIso'>;
@@ -28,11 +29,10 @@ export interface ReportOutcome {
  * chain (e.g., re-throw with id for cross-reference, or escalate if the
  * per-case audit write failed).
  *
- * TODO: per-case audit logging is currently disabled — `activeCaseDir` is
- * always undefined. The active case is tracked in the renderer's
- * useCaseStore and not yet propagated to main. Wire that in a follow-up
- * (renderer pushes case-open / case-close events via a new IPC channel,
- * main holds the dir in a small module-level state).
+ * Per-case audit logging is wired via the `active-case` module: the renderer
+ * pushes case open/close transitions over `CASE_SET_PATH`, and the case
+ * open/create handlers set it directly. When no case is active, only the
+ * global audit mirror is written.
  */
 export async function reportError(input: ReportInput): Promise<ReportOutcome> {
   const event: ErrorEvent = {
@@ -41,8 +41,10 @@ export async function reportError(input: ReportInput): Promise<ReportOutcome> {
     timestampIso: new Date().toISOString(),
   };
 
-  // 1. Persist to audit log. activeCaseDir intentionally undefined for now.
-  const audit = await recordError(event, undefined);
+  // 1. Persist to audit log. Active case dir (if any) comes from the
+  //    main-side state set by the case open/create handlers and the
+  //    renderer's CASE_SET_PATH push.
+  const audit = await recordError(event, getActiveCaseDir());
 
   // 2. Broadcast to renderer (best-effort — window may not exist during
   //    early startup or shutdown). Wrapped in try/catch so reportError

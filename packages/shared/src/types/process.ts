@@ -51,4 +51,8 @@ export type ToolName =
   | 'odin'
   | 'jadx'
   | 'idevicescreenshot'
-  | 'idevicediagnostics';
+  | 'idevicediagnostics'
+  // Breach & Bypass tools
+  | 'edl'        // bkerler/edl — Qualcomm Emergency Download Mode imager
+  | 'mtk'        // bkerler/mtkclient — MediaTek BROM exploit
+  | 'iphone_backup_decrypt'; // pip iphone_backup_decrypt — iOS encrypted backup decrypt + keychain

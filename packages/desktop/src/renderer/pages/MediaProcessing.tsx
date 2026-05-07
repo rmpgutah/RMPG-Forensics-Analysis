@@ -61,6 +61,7 @@ export const MediaProcessing: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Media Source Folder"
             value={sourceFolder}
             onChange={setSourceFolder}
@@ -68,6 +69,7 @@ export const MediaProcessing: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output / Report Folder"
             value={outputFolder}
             onChange={setOutputFolder}

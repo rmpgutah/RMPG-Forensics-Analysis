@@ -207,6 +207,7 @@ export const AcquisitionReport: React.FC = () => {
 
               <div>
                 <FolderPicker
+            role="output"
                   label="Output Folder"
                   value={outputFolder}
                   onChange={setOutputFolder}

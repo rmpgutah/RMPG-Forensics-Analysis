@@ -115,16 +115,23 @@ export const ToolConfiguration: React.FC = () => {
     ipc.invoke(IPC_CHANNELS.APP_GET_PLATFORM).then((p) => setPlatform(String(p))).catch(() => {});
   }, [checkAllTools, ipc]);
 
-  // Listen for install progress events
+  // Listen for install progress events.
+  //
+  // preload's `api.on` invokes the callback as `callback(...args)` —
+  // pulling the first arg via varargs surfaces the live brew/winget/pip
+  // stdout that the install handler is already streaming. Without this,
+  // Java install showed "Installing..." with no live output forever.
   useEffect(() => {
     const cleanup = window.api.on(
       IPC_CHANNELS.TOOLS_INSTALL_PROGRESS,
-      (data: { toolName: string; message: string; percent?: number }) => {
+      (...args: unknown[]) => {
+        const data = (args[0] ?? {}) as { toolName?: string; message?: string; percent?: number };
+        if (!data.toolName) return;
         setInstallStates((prev) => ({
           ...prev,
-          [data.toolName]: {
+          [data.toolName!]: {
             status: 'installing',
-            message: data.message,
+            message: data.message ?? prev[data.toolName!]?.message ?? 'Installing…',
           },
         }));
       }

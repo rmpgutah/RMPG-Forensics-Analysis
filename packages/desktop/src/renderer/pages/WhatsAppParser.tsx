@@ -83,6 +83,7 @@ export const WhatsAppParser: React.FC = () => {
           {messages.length > 0 && (
             <>
               <FolderPicker
+            role="output"
                 label="Report Output Folder"
                 value={outputFolder}
                 onChange={setOutputFolder}

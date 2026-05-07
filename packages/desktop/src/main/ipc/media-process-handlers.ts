@@ -92,36 +92,67 @@ export function registerMediaProcessHandlers(): void {
       sendProgress(`Found ${allFiles.length} files.`);
 
       const mediaEntries: MediaFileEntry[] = [];
+      const skippedFiles: { filePath: string; reason: string }[] = [];
       let totalSize = 0;
 
       for (let i = 0; i < allFiles.length; i++) {
         const filePath = allFiles[i];
         const fileName = path.basename(filePath);
-        const stat = await fs.stat(filePath);
-        const mimeType = getMimeType(filePath);
-        const category = categorizeFile(mimeType);
+        try {
+          const stat = await fs.stat(filePath);
+          const mimeType = getMimeType(filePath);
+          const category = categorizeFile(mimeType);
 
-        mediaEntries.push({
-          filePath,
-          fileName,
-          mimeType,
-          size: stat.size,
-          category,
-        });
+          mediaEntries.push({
+            filePath,
+            fileName,
+            mimeType,
+            size: stat.size,
+            category,
+          });
 
-        totalSize += stat.size;
+          totalSize += stat.size;
+        } catch (err) {
+          // Skip unreadable files (ENOENT from APFS clones / extracted iOS
+          // backups where Manifest references blobs that weren't extracted,
+          // EACCES on permission-restricted system files, etc). Record so the
+          // analyst sees what was skipped.
+          const reason = err instanceof Error ? err.message : String(err);
+          skippedFiles.push({ filePath, reason });
+        }
 
         if ((i + 1) % 50 === 0) {
           sendProgress(`Scanned ${i + 1}/${allFiles.length} files...`);
         }
       }
 
+      if (skippedFiles.length > 0) {
+        sendProgress(`Skipped ${skippedFiles.length} unreadable file(s) (see skipped_files.txt).`);
+        const skipLogPath = path.join(outputDir, 'skipped_files.txt');
+        const skipLines = skippedFiles
+          .map((s) => `${s.filePath}\t${s.reason}`)
+          .join('\n');
+        await fs.writeFile(skipLogPath, skipLines + '\n', 'utf8');
+      }
+
       // Generate hash log if requested
       let hashLogPath: string | undefined;
       if (generateHashLog) {
-        sendProgress(`Computing ${hashAlgorithm.toUpperCase()} hashes for ${allFiles.length} files...`);
+        sendProgress(`Computing ${hashAlgorithm.toUpperCase()} hashes for ${mediaEntries.length} files...`);
         hashLogPath = path.join(outputDir, `hash_log_${hashAlgorithm}.txt`);
-        await hashService.hashDirectory(inputDir, hashAlgorithm, hashLogPath);
+        // Hash only the files we successfully stat'd, not the raw walk —
+        // otherwise hashDirectory will re-fail on the same ENOENT entries.
+        const hashLines: string[] = [];
+        for (const entry of mediaEntries) {
+          try {
+            const h = await hashService.hashFile(entry.filePath, hashAlgorithm);
+            hashLines.push(`${h}  ${entry.filePath}`);
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            skippedFiles.push({ filePath: entry.filePath, reason: `hash failed: ${reason}` });
+          }
+        }
+        await fs.writeFile(hashLogPath, hashLines.join('\n') + '\n', 'utf8');
         sendProgress('Hash log generated.');
       }
 
@@ -145,12 +176,12 @@ export function registerMediaProcessHandlers(): void {
     async (
       _event,
       options: {
-        files: MediaFileEntry[];
+        files?: MediaFileEntry[];
         outputPath: string;
         title?: string;
       }
     ) => {
-      const { files, outputPath, title = 'Media Processing Report' } = options;
+      const { outputPath, title = 'Media Processing Report' } = options;
       const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
@@ -164,12 +195,50 @@ export function registerMediaProcessHandlers(): void {
         }
       };
 
+      // The MediaProcessing page invokes this with just `{ outputPath }` after
+      // it ran MEDIA_PROCESS — the file list was returned to the renderer but
+      // not kept in component state. Rather than crash on `files.length` of
+      // undefined, re-scan the output folder ourselves and reconstruct entries.
+      let files = options.files;
+      if (!files || files.length === 0) {
+        sendProgress('Scanning output folder for media to report on...');
+        const discovered = await collectFiles(outputPath);
+        files = await Promise.all(
+          discovered.map(async (filePath) => {
+            const stat = await fs.stat(filePath);
+            const mimeType = getMimeType(filePath);
+            return {
+              filePath,
+              fileName: path.basename(filePath),
+              mimeType,
+              size: stat.size,
+              category: categorizeFile(mimeType),
+            };
+          })
+        );
+      }
+
       sendProgress(`Generating HTML report with ${files.length} files...`);
+
+      // The renderer passes a folder; the report generator expects a file
+      // path. If we got a directory, write the report inside it with a
+      // sensible default name. Detect by stat'ing — if it's missing or a
+      // file, treat the value as the literal output file path.
+      let reportFile = outputPath;
+      try {
+        const st = await fs.stat(outputPath);
+        if (st.isDirectory()) {
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+          reportFile = path.join(outputPath, `media-report-${stamp}.html`);
+        }
+      } catch {
+        // Path doesn't exist yet — generator will create the parent dir
+      }
 
       const reportPath = await reportGenerator.generateMediaReport({
         title,
         files,
-        outputPath,
+        outputPath: reportFile,
       });
 
       sendProgress(`Report generated: ${reportPath}`);

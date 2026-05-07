@@ -191,6 +191,7 @@ export const MvtScanner: React.FC = () => {
 
           <div className="space-y-4">
             <FolderPicker
+            role="output"
               label="Output Directory (Optional)"
               value={outputDir}
               onChange={setOutputDir}

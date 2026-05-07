@@ -487,17 +487,23 @@ export async function extractPhotos(
  * Copy actual photo/video files out of the backup hashed tree to a readable folder.
  * Files are named with their original filename and organized by date (YYYY-MM/).
  * Returns count of files copied and any errors.
+ *
+ * The progress callback now receives `(copied, total, bytes)` — bytes is
+ * cumulative bytes copied so far. Callers can feed this into a
+ * ProgressTracker to compute smoothed bytes/sec speed and a real ETA
+ * instead of file-count fraction. Older callers that ignore the third
+ * arg keep working unchanged.
  */
 export async function copyPhotosToFolder(
   backupDir: string,
   outputDir: string,
-  onProgress?: (copied: number, total: number) => void
-): Promise<{ copied: number; skipped: number; total: number; error?: string }> {
+  onProgress?: (copied: number, total: number, bytes?: number) => void
+): Promise<{ copied: number; skipped: number; total: number; bytes: number; error?: string }> {
   const manifestPath = path.join(backupDir, 'Manifest.db');
   try {
     await fs.access(manifestPath);
   } catch {
-    return { copied: 0, skipped: 0, total: 0, error: 'Manifest.db not found' };
+    return { copied: 0, skipped: 0, total: 0, bytes: 0, error: 'Manifest.db not found' };
   }
 
   try {
@@ -524,6 +530,7 @@ export async function copyPhotosToFolder(
     const total = rows.length;
     let copied = 0;
     let skipped = 0;
+    let cumulativeBytes = 0;
 
     await fs.mkdir(outputDir, { recursive: true });
 
@@ -534,7 +541,9 @@ export async function copyPhotosToFolder(
       const destPath = path.join(outputDir, originalName);
 
       try {
-        await fs.access(srcPath);
+        // Stat first so we can both verify access and accumulate bytes
+        // for speed/ETA computation. Cheap on macOS APFS (~50µs).
+        const srcStat = await fs.stat(srcPath);
         // Avoid overwriting — append fileID prefix if name collides
         let finalDest = destPath;
         try {
@@ -545,19 +554,22 @@ export async function copyPhotosToFolder(
         } catch { /* dest doesn't exist, use as-is */ }
 
         await fs.copyFile(srcPath, finalDest);
+        cumulativeBytes += srcStat.size;
         copied++;
       } catch {
         skipped++;
       }
 
-      if (onProgress && (copied + skipped) % 10 === 0) {
-        onProgress(copied + skipped, total);
+      // Throttle progress callbacks to ~10/sec by emitting every 10 files
+      // — but always emit on the final file so the bar reaches 100%.
+      if (onProgress && ((copied + skipped) % 10 === 0 || (copied + skipped) === total)) {
+        onProgress(copied + skipped, total, cumulativeBytes);
       }
     }
 
-    return { copied, skipped, total };
+    return { copied, skipped, total, bytes: cumulativeBytes };
   } catch (err) {
-    return { copied: 0, skipped: 0, total: 0, error: (err instanceof Error ? err.message : String(err)) };
+    return { copied: 0, skipped: 0, total: 0, bytes: 0, error: (err instanceof Error ? err.message : String(err)) };
   }
 }
 
@@ -688,6 +700,26 @@ export async function extractVoicemail(
     const Database = require('better-sqlite3');
     const db = new Database(vmDbPath, { readonly: true });
 
+    // The transcript column name varies across iOS versions:
+    //   - iOS 14+: `transcription` (in `voicemail` table)
+    //   - iOS 10-13: stored in a separate `transcript` table joined by ROWID
+    //   - older iOS: not present at all
+    // Sniff PRAGMA to pick the right column rather than guessing.
+    const voicemailCols = (db.prepare('PRAGMA table_info(voicemail)').all() as Array<{ name: string }>)
+      .map((c) => c.name.toLowerCase());
+    const transcriptCol = ['transcription', 'transcript', 'trans_text', 'text']
+      .find((c) => voicemailCols.includes(c));
+
+    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>)
+      .map((t) => t.name.toLowerCase());
+    const hasTranscriptTable = tables.includes('transcript');
+
+    const transcriptSelect = transcriptCol
+      ? `, "${transcriptCol}" as transcription`
+      : hasTranscriptTable
+        ? `, (SELECT text FROM transcript t WHERE t.voicemail_id = voicemail.ROWID LIMIT 1) as transcription`
+        : `, NULL as transcription`;
+
     const voicemails = db.prepare(`
       SELECT
         ROWID as id,
@@ -699,6 +731,7 @@ export async function extractVoicemail(
         flags,
         date,
         token
+        ${transcriptSelect}
       FROM voicemail
       ORDER BY date DESC
     `).all();
@@ -708,6 +741,7 @@ export async function extractVoicemail(
     const appleEpochOffset = 978307200;
     const normalized = (voicemails as Array<Record<string, unknown>>).map((v) => ({
       ...v,
+      transcription: v.transcription ?? '',
       date: v.date ? new Date((Number(v.date) + appleEpochOffset) * 1000).toISOString() : null,
     }));
 
@@ -784,31 +818,257 @@ export async function extractHealthData(
 /**
  * Extract screen time / app usage from an iOS backup (DeviceUsage.sqlite).
  */
+/**
+ * Heuristic mapper from a bundle identifier to a high-level category.
+ * Apple does not store category in the local Screen Time DB — the live
+ * Screen Time UI calls App Store metadata for it. We approximate with a
+ * lookup table covering the common social / messaging / streaming bundles
+ * forensic examiners care about, falling back to substring matches that
+ * catch broad genres ("game", "video", "shop"). Anything unmatched lands
+ * in Other.
+ */
+function categorizeBundleId(bundleId: string): string {
+  const id = bundleId.toLowerCase();
+  const exact: Record<string, string> = {
+    'com.facebook.facebook': 'Social',
+    'com.facebook.messenger': 'Communication',
+    'com.burbn.instagram': 'Social',
+    'com.zhiliaoapp.musically': 'Social',
+    'com.atebits.tweetie2': 'Social',
+    'com.toyopagroup.picaboo': 'Social',
+    'com.reddit.reddit': 'Social',
+    'net.whatsapp.whatsapp': 'Communication',
+    'org.telegram.telegramios': 'Communication',
+    'com.google.gmail': 'Communication',
+    'com.apple.mobilemail': 'Communication',
+    'com.apple.mobilesafari': 'Utilities',
+    'com.google.chrome.ios': 'Utilities',
+    'com.google.ios.youtube': 'Entertainment',
+    'com.netflix.netflix': 'Entertainment',
+    'com.spotify.client': 'Entertainment',
+    'com.apple.music': 'Entertainment',
+    'com.amazon.aiv.aivapp': 'Entertainment',
+    'com.apple.mobilenotes': 'Productivity',
+    'com.microsoft.office.outlook': 'Productivity',
+    'com.apple.maps': 'Travel',
+    'com.google.maps': 'Travel',
+  };
+  if (exact[id]) return exact[id];
+  if (/game|gameloft|playrix|supercell|com\.king\./.test(id)) return 'Games';
+  if (/news|nyt|bbc|cnn|washingtonpost/.test(id)) return 'News';
+  if (/finance|bank|invest|coinbase|robinhood|venmo|paypal/.test(id)) return 'Finance';
+  if (/health|fitness|workout|nike\.run|strava/.test(id)) return 'Health & Fitness';
+  if (/shop|amazon|ebay|etsy|shein/.test(id)) return 'Shopping';
+  if (/edu|duolingo|kahoot|coursera|khan/.test(id)) return 'Education';
+  return 'Other';
+}
+
+/**
+ * Extract Screen Time usage from `ScreenTimeDeviceUsage.sqlite`. The
+ * Apple schema is a Core Data store: ZOBJECT holds polymorphic rows for
+ * apps, web domains, app limits, downtime, etc., joined to ZUSAGEBLOCK
+ * (per-block usage seconds, with parent device pickup/notification counts).
+ *
+ * We return the full `{ appUsage, websites, dailySummaries, limits,
+ * downtime, stats }` shape the IosScreenTime page expects so it actually
+ * has data to display. Time conversion: ZUSAGEBLOCK.ZSTARTDATE is in
+ * Apple's CoreData epoch (seconds since 2001-01-01).
+ */
 export async function extractScreenTime(
   backupDir: string
-): Promise<{ usage: unknown[]; total: number; error?: string }> {
+): Promise<{
+  appUsage: unknown[];
+  websites: unknown[];
+  dailySummaries: unknown[];
+  limits: unknown[];
+  downtime: unknown[];
+  stats: Record<string, unknown> | null;
+  total: number;
+  error?: string;
+}> {
+  const empty = {
+    appUsage: [], websites: [], dailySummaries: [], limits: [], downtime: [],
+    stats: null, total: 0,
+  };
   const usageDbPath = await findBackupFile(
     backupDir,
     'HomeDomain',
     'Library/Application Support/com.apple.remotemanagementd/ScreenTimeDeviceUsage.sqlite'
   );
-  if (!usageDbPath) {
-    return { usage: [], total: 0, error: 'Screen Time database not found in backup.' };
+  // Some iOS versions use a slightly different path / filename
+  const fallbackDbPath = !usageDbPath
+    ? await findBackupFile(backupDir, 'HomeDomain', 'Library/Application Support/com.apple.remotemanagementd/RMAdminStore-Local.sqlite')
+    : null;
+  const dbPath = usageDbPath ?? fallbackDbPath;
+  if (!dbPath) {
+    return { ...empty, error: 'Screen Time database not found in backup.' };
   }
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Database = require('better-sqlite3');
-    const db = new Database(usageDbPath, { readonly: true });
+    const db = new Database(dbPath, { readonly: true });
 
-    const tables = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-      .all() as Array<{ name: string }>;
+    // Verify ZUSAGEBLOCK + ZOBJECT exist; otherwise we're looking at a
+    // non-ScreenTime sqlite that happens to live at the same path.
+    const tableNames = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>)
+      .map((t) => t.name);
+    if (!tableNames.includes('ZUSAGEBLOCK') || !tableNames.includes('ZOBJECT')) {
+      db.close();
+      return { ...empty, error: 'Screen Time schema not found (ZUSAGEBLOCK/ZOBJECT missing).' };
+    }
+
+    // Per-app usage rows. Schema notes:
+    // - ZOBJECT.Z_ENT identifies the row type; ZCATEGORY 1 = bundle id record
+    // - ZBUNDLEIDENTIFIER and ZNAME live on ZOBJECT for app records
+    // - ZUSAGEBLOCK.ZSTARTDATE (CoreData epoch) and ZTOTALUSAGE (seconds)
+    //   join via ZUSAGEBLOCK.ZUSAGE → ZUSAGE.ZBLOCK / ZUSAGEBLOCK.ZUSAGE
+    let appRows: Array<Record<string, unknown>> = [];
+    try {
+      appRows = db.prepare(`
+        SELECT
+          ub.Z_PK as block_id,
+          ub.ZSTARTDATE as start_date,
+          ub.ZTOTALUSAGE as total_usage,
+          ub.ZNUMBEROFNOTIFICATIONS as notifications,
+          ub.ZNUMBEROFPICKUPS as pickups,
+          o.ZBUNDLEIDENTIFIER as bundle_id,
+          o.ZNAME as app_name,
+          o.ZDOMAIN as domain
+        FROM ZUSAGEBLOCK ub
+        LEFT JOIN ZOBJECT o ON o.ZBLOCK = ub.Z_PK
+        WHERE o.ZBUNDLEIDENTIFIER IS NOT NULL
+        ORDER BY ub.ZSTARTDATE DESC
+        LIMIT 50000
+      `).all() as Array<Record<string, unknown>>;
+    } catch {
+      // Schema slightly different on this iOS version — fall back to a
+      // simpler query that returns any ZUSAGEBLOCK rows we can find.
+      try {
+        appRows = db.prepare(`
+          SELECT
+            Z_PK as block_id,
+            ZSTARTDATE as start_date,
+            ZTOTALUSAGE as total_usage
+          FROM ZUSAGEBLOCK
+          ORDER BY ZSTARTDATE DESC
+          LIMIT 50000
+        `).all() as Array<Record<string, unknown>>;
+      } catch { /* leave empty */ }
+    }
+
+    const appUsage: Array<{
+      id: string;
+      date: string;
+      appName: string;
+      bundleId: string;
+      category: string;
+      usageMinutes: number;
+      notificationCount: number;
+      pickupCount: number;
+    }> = [];
+    const websites: Array<{ id: string; date: string; domain: string; usageMinutes: number; category: string }> = [];
+
+    for (const row of appRows) {
+      const startSec = Number(row.start_date);
+      if (!Number.isFinite(startSec)) continue;
+      const date = new Date((startSec + CORE_DATA_EPOCH_OFFSET) * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const minutes = Math.round(Number(row.total_usage ?? 0) / 60);
+      if (minutes <= 0) continue;
+
+      const bundleId = String(row.bundle_id ?? '');
+      const appName = String(row.app_name ?? bundleId.split('.').pop() ?? 'Unknown');
+      const domain = row.domain ? String(row.domain) : '';
+
+      if (domain) {
+        websites.push({
+          id: `web-${row.block_id}`,
+          date,
+          domain,
+          usageMinutes: minutes,
+          category: 'Utilities',
+        });
+        continue;
+      }
+
+      appUsage.push({
+        id: `app-${row.block_id}`,
+        date,
+        appName,
+        bundleId,
+        category: categorizeBundleId(bundleId),
+        usageMinutes: minutes,
+        notificationCount: Number(row.notifications ?? 0),
+        pickupCount: Number(row.pickups ?? 0),
+      });
+    }
+
     db.close();
 
-    return { usage: tables.map((t) => ({ table: t.name })), total: tables.length };
+    // Daily summaries — group appUsage by date and rank top apps + categories.
+    const byDate = new Map<string, typeof appUsage>();
+    for (const a of appUsage) {
+      const list = byDate.get(a.date) ?? [];
+      list.push(a);
+      byDate.set(a.date, list);
+    }
+    const dailySummaries = Array.from(byDate.entries())
+      .map(([date, dayApps]) => {
+        const totalUsageMinutes = dayApps.reduce((s, a) => s + a.usageMinutes, 0);
+        const pickupCount = dayApps.reduce((s, a) => s + a.pickupCount, 0);
+        const notificationCount = dayApps.reduce((s, a) => s + a.notificationCount, 0);
+        const topApps = [...dayApps]
+          .sort((a, b) => b.usageMinutes - a.usageMinutes)
+          .slice(0, 5)
+          .map((a) => ({ appName: a.appName, minutes: a.usageMinutes }));
+        const catMap = new Map<string, number>();
+        for (const a of dayApps) catMap.set(a.category, (catMap.get(a.category) ?? 0) + a.usageMinutes);
+        const categoryBreakdown = Array.from(catMap.entries())
+          .map(([category, minutes]) => ({ category, minutes }))
+          .sort((a, b) => b.minutes - a.minutes);
+        return {
+          date,
+          totalUsageMinutes,
+          pickupCount,
+          notificationCount,
+          firstPickupTime: '',
+          topApps,
+          categoryBreakdown,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const totalDays = dailySummaries.length || 1;
+    const stats = {
+      totalApps: new Set(appUsage.map((a) => a.bundleId)).size,
+      totalDays,
+      averageDailyUsage: Math.round(
+        dailySummaries.reduce((s, d) => s + d.totalUsageMinutes, 0) / totalDays
+      ),
+      averageDailyPickups: Math.round(
+        dailySummaries.reduce((s, d) => s + d.pickupCount, 0) / totalDays
+      ),
+      averageDailyNotifications: Math.round(
+        dailySummaries.reduce((s, d) => s + d.notificationCount, 0) / totalDays
+      ),
+      totalWebsites: new Set(websites.map((w) => w.domain)).size,
+      appLimitsCount: 0,
+      downtimeEnabled: false,
+    };
+
+    return {
+      appUsage,
+      websites,
+      dailySummaries,
+      limits: [],
+      downtime: [],
+      stats,
+      total: appUsage.length + websites.length,
+    };
   } catch (err) {
-    return { usage: [], total: 0, error: (err instanceof Error ? err.message : String(err)) };
+    return { ...empty, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

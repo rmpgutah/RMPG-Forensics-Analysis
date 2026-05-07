@@ -20,21 +20,27 @@ export function registerFileExtractHandlers(): void {
     IPC_CHANNELS.FILE_EXTRACT_FORMAT,
     async (
       _event,
+      // FileExtraction page sends `formats`/`remotePath`/`outputPath`; older
+      // callers use `extensions`/`searchPath`/`outputDir`. Accept both so
+      // the handler doesn't crash with `outputDir` undefined.
       options: {
         serial: string;
-        extensions: string[];
-        searchPath: string;
-        outputDir: string;
+        extensions?: string[];
+        searchPath?: string;
+        outputDir?: string;
+        formats?: string[];
+        remotePath?: string;
+        outputPath?: string;
         maxFiles?: number;
       }
     ) => {
-      const {
-        serial,
-        extensions,
-        searchPath = '/sdcard/',
-        outputDir,
-        maxFiles = 10000,
-      } = options;
+      const serial = options.serial;
+      const extensions = options.extensions ?? options.formats ?? [];
+      const searchPath = options.searchPath ?? options.remotePath ?? '/sdcard/';
+      const outputDir = options.outputDir ?? options.outputPath;
+      const maxFiles = options.maxFiles ?? 10000;
+      if (!outputDir) throw new Error('No output folder selected.');
+      if (extensions.length === 0) throw new Error('No file formats selected.');
       const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {

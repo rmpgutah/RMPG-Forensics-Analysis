@@ -218,6 +218,7 @@ export const MultiDevice: React.FC = () => {
 
           <div className="col-span-2 space-y-4">
             <FolderPicker
+            role="output"
               label="Output Directory"
               value={outputDir}
               onChange={setOutputDir}

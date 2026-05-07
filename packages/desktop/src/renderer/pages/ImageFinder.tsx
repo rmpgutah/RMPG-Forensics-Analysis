@@ -14,7 +14,8 @@ import {
   Camera,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, LogConsole, FolderPicker } from '../components/common';
+import { PageHeader, LogConsole, FolderPicker, MapPreview } from '../components/common';
+import type { MapPoint } from '../components/common';
 import { useIpc } from '../hooks';
 
 type SearchMode = 'hash' | 'exif' | 'geolocation';
@@ -129,6 +130,22 @@ export const ImageFinder: React.FC = () => {
     }
   };
 
+  // Map points derived from filtered results — only images with EXIF GPS
+  // are mappable. Memoised so the map only re-renders when the geo-tagged
+  // subset actually changes (filter text edits that don't touch geo are
+  // free).
+  const mapPoints = useMemo<MapPoint[]>(() => {
+    return results
+      .filter((r) => typeof r.latitude === 'number' && typeof r.longitude === 'number')
+      .map((r) => ({
+        latitude: r.latitude as number,
+        longitude: r.longitude as number,
+        label: r.filename,
+        timestamp: r.dateTaken,
+        source: r.cameraMake || r.cameraModel ? `${r.cameraMake ?? ''} ${r.cameraModel ?? ''}`.trim() : undefined,
+      }));
+  }, [results]);
+
   const filteredResults = useMemo(() => {
     if (!filterText) return results;
     const lower = filterText.toLowerCase();
@@ -162,6 +179,7 @@ export const ImageFinder: React.FC = () => {
       <div className="card">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Source Directory"
             value={sourceDir}
             onChange={setSourceDir}
@@ -300,6 +318,14 @@ export const ImageFinder: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Geo-tagged results map — only renders when at least one image has
+          EXIF GPS. Same persistent-instance Leaflet component used by
+          GeolocationMapper, so panning / zooming stays smooth as the user
+          types into the filter box. */}
+      {mapPoints.length > 0 && (
+        <MapPreview points={mapPoints} height={360} />
+      )}
 
       {/* Results toolbar */}
       {results.length > 0 && (

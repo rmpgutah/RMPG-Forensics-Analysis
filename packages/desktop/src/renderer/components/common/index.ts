@@ -14,3 +14,5 @@ export { ShortcutsModal } from './ShortcutsModal';
 export { ErrorBanner } from './ErrorBanner';
 export { ErrorToast } from './ErrorToast';
 export { ErrorModal } from './ErrorModal';
+export { MapPreview } from './MapPreview';
+export type { MapPoint } from './MapPreview';

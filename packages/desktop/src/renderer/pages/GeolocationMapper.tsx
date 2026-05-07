@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, DeviceSelector, FolderPicker, FilePicker } from '../components/common';
+import { PageHeader, DeviceSelector, FolderPicker, FilePicker, MapPreview } from '../components/common';
 import { useDeviceStatus } from '../hooks';
 
 type ExtractionSource = 'device' | 'images' | 'database' | 'csv';
@@ -201,7 +201,19 @@ export const GeolocationMapper: React.FC = () => {
               )}
             </div>
 
-            <div className="max-h-[440px] overflow-y-auto rounded-lg border border-[var(--border-color)]">
+            {/*
+              Live map preview — uses the MapPreview component (Leaflet +
+              marker clustering). Stays mounted across re-renders so pan/zoom
+              state survives toggling other UI on the page; only the marker
+              layer is rebuilt when `points` changes.
+            */}
+            {points.length > 0 && (
+              <div className="mb-3">
+                <MapPreview points={points} height={360} />
+              </div>
+            )}
+
+            <div className="max-h-[300px] overflow-y-auto rounded-lg border border-[var(--border-color)]">
               {points.length === 0 ? (
                 <div className="py-12 text-center">
                   <Globe size={32} className="mx-auto mb-2 text-[var(--text-muted)]" />
@@ -258,6 +270,7 @@ export const GeolocationMapper: React.FC = () => {
               </div>
 
               <FolderPicker
+            role="output"
                 label="Output Folder"
                 value={outputFolder}
                 onChange={setOutputFolder}

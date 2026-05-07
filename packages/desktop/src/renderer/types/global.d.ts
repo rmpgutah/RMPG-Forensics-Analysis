@@ -43,6 +43,10 @@ export interface ElectronAPI {
   removeListener: (channel: string, callback: (...args: unknown[]) => void) => void;
   removeAllListeners: (channel: string) => void;
   platform: NodeJS.Platform;
+  /** Resolve a dropped File's host filesystem path. Electron 32+ replacement
+   *  for the deprecated `File.path`. Empty string if the file has no path
+   *  (e.g. clipboard-pasted blob with no disk backing). */
+  getPathForFile: (file: File) => string;
 }
 
 declare global {

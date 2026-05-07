@@ -303,9 +303,12 @@ export const DeviceReboot: React.FC = () => {
         </div>
       </div>
 
-      {/* Confirmation dialog */}
+      {/* Confirmation dialog — `open` is required by ConfirmDialogProps;
+          guarding the whole element with confirmMode keeps it unmounted
+          until needed but still satisfies the type. */}
       {confirmMode && activeConfirmOption && (
         <ConfirmDialog
+          open
           title={`Confirm: ${activeConfirmOption.label}`}
           message={activeConfirmOption.warning}
           confirmLabel={`Reboot to ${activeConfirmOption.label}`}

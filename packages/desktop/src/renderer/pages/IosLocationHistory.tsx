@@ -21,7 +21,8 @@ import {
   Eye,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, IosDeviceBar } from '../components/common';
+import { PageHeader, IosDeviceBar, MapPreview } from '../components/common';
+import type { MapPoint } from '../components/common';
 import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
@@ -66,7 +67,7 @@ type ExportFormat = 'kml' | 'csv';
 /* ------------------------------------------------------------------ */
 
 export const IosLocationHistory: React.FC = () => {
-  const [backupDir, setBackupDir] = useState('');
+  const [backupPath, setBackupPath] = useState('');
   const [locations, setLocations] = useState<LocationRecord[]>([]);
   const [filteredLocations, setFilteredLocations] = useState<LocationRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,13 +84,13 @@ export const IosLocationHistory: React.FC = () => {
   const pageSize = 50;
 
   const handleExtract = async () => {
-    if (!backupDir) return;
+    if (!backupPath) return;
     setLoading(true);
     setLocations([]);
     setStats(null);
     try {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_LOCATION_EXTRACT, {
-        backupDir,
+        backupPath,
         includeAll: true,
       }) as { locations: LocationRecord[]; stats: LocationStats };
       setLocations(result.locations);
@@ -111,7 +112,7 @@ export const IosLocationHistory: React.FC = () => {
       });
       if (savePath) {
         await window.api.invoke(IPC_CHANNELS.IOS_LOCATION_EXTRACT, {
-          backupDir,
+          backupPath,
           exportPath: savePath,
           exportFormat: format,
           locationIds: filteredLocations.map((l) => l.id),
@@ -217,12 +218,12 @@ export const IosLocationHistory: React.FC = () => {
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
         <div className="space-y-3">
           <IosDeviceBar
-            backupDir={backupDir}
-            onBackupPath={setBackupDir}
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
             disabled={loading}
           />
           <div className="flex justify-end">
-            <button onClick={handleExtract} className="btn-primary" disabled={!backupDir || loading}>
+            <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
               {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
               {loading ? 'Extracting...' : 'Extract Location Data'}
             </button>
@@ -323,31 +324,30 @@ export const IosLocationHistory: React.FC = () => {
         </div>
       )}
 
-      {/* Map / Heatmap View */}
-      {(viewMode === 'map' || viewMode === 'heatmap') && filteredLocations.length > 0 && (
-        <div className="card p-6" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', minHeight: '400px' }}>
-          <div className="text-center">
-            <MapIcon size={64} className="mx-auto mb-4 text-cyan-400" />
-            <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-              {viewMode === 'heatmap' ? 'Location Heatmap' : 'Location Map'}
-            </h3>
-            <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-              {filteredLocations.length.toLocaleString()} location points ready for visualization
-            </p>
-            <div className="max-w-lg mx-auto space-y-2">
-              {filteredLocations.slice(0, 8).map((loc) => (
-                <div key={loc.id} className="flex items-center justify-between p-2 rounded text-sm" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                  <div className="flex items-center gap-2">
-                    {getSourceIcon(loc.source)}
-                    <span style={{ color: 'var(--text-primary)' }}>{loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}</span>
-                  </div>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtDate(loc.timestamp)}</span>
-                </div>
-              ))}
+      {/* Map / Heatmap View — real Leaflet preview replacing the legacy
+          placeholder. Heatmap mode reuses the same component for now (a
+          dedicated heat layer would need leaflet.heat); clusters already
+          give a heat-like density signal at low zoom levels. */}
+      {(viewMode === 'map' || viewMode === 'heatmap') && filteredLocations.length > 0 && (() => {
+        const mapPoints: MapPoint[] = filteredLocations.map((loc) => ({
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          label: loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`,
+          timestamp: loc.timestamp,
+          source: loc.source,
+        }));
+        return (
+          <div className="card p-3" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="mb-2 flex items-center justify-between text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>{filteredLocations.length.toLocaleString()} location points</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {viewMode === 'heatmap' ? 'Clusters approximate visit density' : 'Click a pin for details'}
+              </span>
             </div>
+            <MapPreview points={mapPoints} height={520} />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* List View */}
       {viewMode === 'list' && paginatedLocations.length > 0 && (

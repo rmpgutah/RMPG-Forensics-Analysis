@@ -62,6 +62,7 @@ export const AdbBackup: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}

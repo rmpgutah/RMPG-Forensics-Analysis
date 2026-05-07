@@ -23,7 +23,8 @@ import {
   Clock,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, IosDeviceBar, ProgressIndicator } from '../components/common';
+import { PageHeader, IosDeviceBar, ProgressIndicator, MapPreview } from '../components/common';
+import type { MapPoint } from '../components/common';
 import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
@@ -155,7 +156,11 @@ export const IosPhotos: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, (_event: unknown, data: Record<string, unknown>) => {
+    // preload's `api.on` invokes the callback as `callback(...args)` —
+    // there's NO leading event arg. Declaring `(_event, data)` made `data`
+    // be `undefined` and progress bars never advanced.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_PHOTOS_EXTRACT_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? {}) as Record<string, unknown>;
       const pct = typeof data.percent === 'number' ? data.percent : 0;
       setExtractProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
       if (pct >= 100) setExtracting(false);
@@ -439,29 +444,38 @@ export const IosPhotos: React.FC = () => {
         </div>
       )}
 
-      {/* Map View Placeholder */}
-      {viewMode === 'map' && photos.length > 0 && (
-        <div className="card p-8 text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', minHeight: '400px' }}>
-          <Map size={64} className="mx-auto mb-4 text-cyan-400" />
-          <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Geotagged Photo Map</h3>
-          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-            {filteredPhotos.filter((p) => p.gpsLatitude !== null).length} geotagged items ready for map display
-          </p>
-          <div className="max-w-md mx-auto space-y-2">
-            {filteredPhotos.filter((p) => p.gpsLatitude !== null).slice(0, 10).map((p) => (
-              <div key={p.id} className="flex items-center justify-between p-2 rounded text-sm" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                <span style={{ color: 'var(--text-primary)' }}>{p.filename}</span>
-                <span className="text-xs text-cyan-400">{p.gpsLatitude?.toFixed(4)}, {p.gpsLongitude?.toFixed(4)}</span>
-              </div>
-            ))}
-            {filteredPhotos.filter((p) => p.gpsLatitude !== null).length > 10 && (
-              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                ... and {filteredPhotos.filter((p) => p.gpsLatitude !== null).length - 10} more locations
-              </div>
-            )}
+      {/* Map View — real Leaflet preview replacing the legacy placeholder.
+          Only geotagged photos appear; clicking a pin pops the filename
+          and date taken. Filters apply (mediaFilter, album, date range)
+          so the map and table stay in sync. */}
+      {viewMode === 'map' && photos.length > 0 && (() => {
+        const mapPoints: MapPoint[] = filteredPhotos
+          .filter((p) => p.gpsLatitude !== null && p.gpsLongitude !== null)
+          .map((p) => ({
+            latitude: p.gpsLatitude as number,
+            longitude: p.gpsLongitude as number,
+            label: p.filename,
+            timestamp: p.dateTaken,
+            source: [p.cameraMake, p.cameraModel].filter(Boolean).join(' ') || (p.album ? `Album: ${p.album}` : undefined),
+          }));
+        if (mapPoints.length === 0) {
+          return (
+            <div className="card p-8 text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <Map size={48} className="mx-auto mb-3 text-[var(--text-muted)]" />
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No geotagged items in the current filter.</p>
+            </div>
+          );
+        }
+        return (
+          <div className="card p-3" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="mb-2 flex items-center justify-between text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>{mapPoints.length} geotagged items</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Click a pin for details</span>
+            </div>
+            <MapPreview points={mapPoints} height={520} />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Pagination */}
       {paginatedPhotos.length > 0 && (

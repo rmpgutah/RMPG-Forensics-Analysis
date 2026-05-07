@@ -207,7 +207,7 @@
         <div class="product-meta">
           <h3>RMPG Forensics Analysis</h3>
           <p>Cross-platform mobile device forensics toolkit</p>
-          <span class="product-badge badge-stable">v1.0.0 Stable</span>
+          <span class="product-badge badge-stable" data-fa-version>v1.0.50 Stable</span>
         </div>
       </div>
 
@@ -230,34 +230,42 @@
         <span class="pill">Samsung Unlock</span>
       </div>
 
-      <div class="dl-cards">
+      <!--
+        data-fa-* attributes are populated at page load by the script
+        block at the end of <body>: it fetches /downloads/updates/latest-mac.yml,
+        parses out the latest version + file sizes from electron-updater's
+        manifest, and rewires href + size + version label. Hardcoded
+        defaults below are the floor — they work even if the fetch fails
+        (offline preview, blocked CORS, etc).
+      -->
+      <div class="dl-cards" data-product="forensics-analysis">
         <div class="dl-card">
-          <h4>Windows</h4>
-          <p class="arch">x64 &middot; Windows 10 / 11</p>
-          <a href="/downloads/RMPG-Forensics-Analysis-Windows.zip" class="btn btn-blue">
+          <h4>macOS — Apple Silicon</h4>
+          <p class="arch">M1 / M2 / M3 / M4</p>
+          <a data-fa-arm64-dmg href="/downloads/updates/RMPG-Forensics-Analysis-arm64.dmg" class="btn btn-blue">
             <svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download .zip
+            Download .dmg
           </a>
-          <div class="file-size">~113 MB</div>
+          <a data-fa-arm64-zip href="/downloads/updates/RMPG-Forensics-Analysis-arm64.zip" class="btn btn-outline">.zip (auto-update)</a>
+          <div class="file-size" data-fa-arm64-size>~118 MB</div>
         </div>
         <div class="dl-card">
-          <h4>macOS</h4>
-          <p class="arch">Apple Silicon + Intel</p>
-          <a href="https://github.com/rmpgutah/RMPG-Forensics-Analysis/releases/latest" class="btn btn-blue">
+          <h4>macOS — Intel</h4>
+          <p class="arch">x86_64 &middot; macOS 11+</p>
+          <a data-fa-x64-dmg href="/downloads/updates/RMPG-Forensics-Analysis-x64.dmg" class="btn btn-blue">
             <svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download .dmg (ARM)
+            Download .dmg
           </a>
-          <a href="https://github.com/rmpgutah/RMPG-Forensics-Analysis/releases/latest" class="btn btn-outline">Intel .dmg</a>
-          <div class="file-size">~130 MB</div>
+          <a data-fa-x64-zip href="/downloads/updates/RMPG-Forensics-Analysis-x64.zip" class="btn btn-outline">.zip (auto-update)</a>
+          <div class="file-size" data-fa-x64-size>~126 MB</div>
         </div>
         <div class="dl-card">
-          <h4>Linux</h4>
-          <p class="arch">x64 &middot; Ubuntu 20.04+</p>
-          <a href="https://github.com/rmpgutah/RMPG-Forensics-Analysis/releases/latest" class="btn btn-blue">
-            <svg class="dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download .AppImage
+          <h4>Windows / Linux</h4>
+          <p class="arch">Coming soon</p>
+          <a href="mailto:support@rmpgutah.us?subject=Forensics%20Analysis%20-%20Windows%2FLinux%20build" class="btn btn-outline">
+            Request a build
           </a>
-          <a href="https://github.com/rmpgutah/RMPG-Forensics-Analysis/releases/latest" class="btn btn-outline">.deb Package</a>
+          <div class="file-size">Auto-update bundled — no need to re-download.</div>
           <div class="file-size">~110 MB</div>
         </div>
       </div>
@@ -445,6 +453,58 @@
   </footer>
 
   <script>
+    // ── Live version sync ──
+    // electron-builder publishes a tiny YAML manifest at
+    // /downloads/updates/latest-mac.yml each release. Parse it client-side
+    // (no js-yaml needed; the format is regular enough) and rewire the
+    // download buttons + version badge so this page never goes stale
+    // between deploys. Hardcoded fallbacks in the HTML take over on any
+    // failure (offline / CORS / file missing).
+    (async () => {
+      try {
+        const res = await fetch('/downloads/updates/latest-mac.yml', { cache: 'no-store' });
+        if (!res.ok) return;
+        const text = await res.text();
+        const version = (text.match(/^version:\s*(\S+)/m) || [])[1];
+        if (!version) return;
+
+        // Parse the `files:` block — list of { url, sha512, size }.
+        // Iterate by url since each variant has a unique filename.
+        const files = {};
+        for (const m of text.matchAll(/-\s*url:\s*(\S+)\s*\n\s*sha512:[^\n]*\n\s*size:\s*(\d+)/g)) {
+          files[m[1]] = parseInt(m[2], 10);
+        }
+
+        const fmtMB = (b) => b ? `${(b / 1_048_576).toFixed(0)} MB` : '';
+        const setHref = (sel, name) => {
+          const el = document.querySelector(sel);
+          if (el && name) el.setAttribute('href', `/downloads/updates/${name}`);
+        };
+        const setText = (sel, value) => {
+          const el = document.querySelector(sel);
+          if (el && value) el.textContent = value;
+        };
+
+        // Filenames follow electron-builder's pattern:
+        //   RMPG-Forensics-Analysis-<version>-<arch>.<ext>
+        const armDmg = `RMPG-Forensics-Analysis-${version}-arm64.dmg`;
+        const armZip = `RMPG-Forensics-Analysis-${version}-arm64.zip`;
+        const x64Dmg = `RMPG-Forensics-Analysis-${version}-x64.dmg`;
+        const x64Zip = `RMPG-Forensics-Analysis-${version}-x64.zip`;
+
+        setHref('[data-fa-arm64-dmg]', armDmg);
+        setHref('[data-fa-arm64-zip]', armZip);
+        setHref('[data-fa-x64-dmg]', x64Dmg);
+        setHref('[data-fa-x64-zip]', x64Zip);
+        setText('[data-fa-arm64-size]', fmtMB(files[armDmg]));
+        setText('[data-fa-x64-size]', fmtMB(files[x64Dmg]));
+        setText('[data-fa-version]', `v${version} Stable`);
+      } catch (err) {
+        // Network blocked / file missing — leave the hardcoded floor in place.
+        console.warn('Live version sync failed:', err);
+      }
+    })();
+
     // Smooth scroll for nav links
     document.querySelectorAll('.nav-links a').forEach(link => {
       link.addEventListener('click', e => {

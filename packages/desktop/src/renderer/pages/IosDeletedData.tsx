@@ -237,7 +237,11 @@ export const IosDeletedData: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_DELETED_RECOVER_PROGRESS, (_event: unknown, data: Record<string, unknown>) => {
+    // preload's `api.on` invokes the callback as `callback(...args)` —
+    // no leading event arg. Old `(_event, data)` captured `undefined` as
+    // `data` so recovery progress never updated.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_DELETED_RECOVER_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? {}) as Record<string, unknown>;
       const pct = typeof data.percent === 'number' ? data.percent : 0;
       setRecoverProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
       if (pct >= 100) setRecovering(false);

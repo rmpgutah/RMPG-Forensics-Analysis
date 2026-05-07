@@ -104,7 +104,13 @@ const DeviceProfileCard: React.FC<{ profile: DeviceProfile; onRescan: () => void
         </div>
         <div className="flex items-center gap-2">
           {profile.scanning && <Loader2 size={14} className="animate-spin" style={{ color: accentColor }} />}
-          {profile.error && <AlertCircle size={14} className="text-red-400" title={profile.error} />}
+          {/* lucide-react icons don't accept a `title` prop directly — wrap
+              in a span so the tooltip still renders on hover. */}
+          {profile.error && (
+            <span title={profile.error} className="inline-flex">
+              <AlertCircle size={14} className="text-red-400" />
+            </span>
+          )}
           {!profile.scanning && (
             <button onClick={onRescan} title="Re-scan device" className="rounded p-1 hover:bg-white/10">
               <RefreshCw size={13} style={{ color: 'var(--text-muted)' }} />
@@ -353,33 +359,75 @@ export const Dashboard: React.FC = () => {
     <>
     <div className="space-y-6">
       {/* Hero */}
-      <div className="card rounded-xl bg-gradient-to-br from-[#1a2a3a] to-[#0d3b5e] p-8 text-center" style={{ border: 'none' }}>
-        <div className="mb-3 flex items-center justify-center">
-          <div className="rounded-xl bg-white/10 p-3">
-            <Shield size={32} className="text-[#6495ED]" />
+      <div
+        className="relative overflow-hidden rounded-2xl p-10 text-center"
+        style={{
+          background:
+            'radial-gradient(120% 80% at 50% 0%, rgba(100,149,237,0.25) 0%, rgba(13,59,94,0.5) 40%, #0a1828 100%)',
+          border: '1px solid rgba(100,149,237,0.25)',
+          boxShadow: '0 20px 60px -20px rgba(100,149,237,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
+        }}
+      >
+        {/* Grid backdrop */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+            maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+          }}
+        />
+        {/* Floating glows */}
+        <div className="pointer-events-none absolute -top-20 -left-20 h-72 w-72 rounded-full bg-[#6495ED]/30 blur-[80px]" />
+        <div className="pointer-events-none absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-red-500/15 blur-[80px]" />
+
+        <div className="relative">
+          <div className="mb-4 flex items-center justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 -m-2 animate-pulse rounded-2xl bg-[#6495ED]/30 blur-xl" />
+              <div className="relative rounded-2xl p-[1.5px]" style={{ background: 'linear-gradient(135deg, #7EAAFF, transparent 50%, #ef4444)' }}>
+                <div className="rounded-2xl bg-[#0f2238]/90 p-3 backdrop-blur">
+                  <Shield size={36} className="text-[#6495ED] drop-shadow-[0_0_10px_rgba(100,149,237,0.7)]" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-wide">
+            <span className="bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent">RMPG</span>{' '}
+            <span className="bg-gradient-to-b from-red-400 to-red-600 bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(239,68,68,0.4)]">FORENSICS</span>
+          </h1>
+          <p className="mt-2 text-xs uppercase tracking-[0.4em]" style={{ color: 'var(--text-secondary)' }}>
+            Digital Forensics Acquisition &amp; Analysis Toolkit
+          </p>
+          <div className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] uppercase tracking-widest text-emerald-300">
+            <span className="live-dot" /> System Online · All Modules Ready
           </div>
         </div>
-        <h1 className="text-2xl font-bold text-white">
-          <span className="text-white">RMPG</span>{' '}
-          <span className="text-red-400">FORENSICS</span>
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Digital Forensics Acquisition &amp; Analysis Toolkit
-        </p>
       </div>
 
       {/* Case Statistics */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Total Cases', value: allCases.length, icon: <BarChart2 size={16} className="text-[#6495ED]" /> },
-          { label: 'Android Devices', value: androidDevices.length, icon: <Smartphone size={16} className="text-green-400" /> },
-          { label: 'iOS Devices', value: iosDevices.length, icon: <Apple size={16} className="text-[#6495ED]" /> },
+          { label: 'Total Cases', value: allCases.length, icon: <BarChart2 size={20} />, color: '#6495ED' },
+          { label: 'Android Devices', value: androidDevices.length, icon: <Smartphone size={20} />, color: '#4ade80' },
+          { label: 'iOS Devices', value: iosDevices.length, icon: <Apple size={20} />, color: '#9bb8ee' },
         ].map((stat) => (
-          <div key={stat.label} className="card flex items-center gap-3 py-3 px-4">
-            {stat.icon}
-            <div>
-              <div className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{stat.value}</div>
-              <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{stat.label}</div>
+          <div key={stat.label} className="stat-card flex items-center gap-4">
+            <div
+              className="icon-tile h-12 w-12 shrink-0"
+              style={{
+                background: `linear-gradient(135deg, ${stat.color}33, ${stat.color}10)`,
+                border: `1px solid ${stat.color}40`,
+                color: stat.color,
+              }}
+            >
+              {stat.icon}
+            </div>
+            <div className="flex-1">
+              <div className="stat-number">{stat.value}</div>
+              <div className="stat-label">{stat.label}</div>
             </div>
           </div>
         ))}
@@ -387,20 +435,44 @@ export const Dashboard: React.FC = () => {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
-        <button onClick={handleCreateCase}
-          className="card flex flex-col items-center gap-3 p-8 text-center transition hover:border-[#6495ED]">
-          <div className="rounded-xl bg-[#6495ED]/15 p-4"><FolderPlus size={32} className="text-[#6495ED]" /></div>
-          <div>
-            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>NEW CASE</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Start a new forensic case</p>
+        <button
+          onClick={handleCreateCase}
+          className="card group relative flex flex-col items-center gap-3 overflow-hidden p-8 text-center transition-all hover:scale-[1.01] hover:border-[#6495ED]"
+        >
+          <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-[#6495ED]/15 blur-2xl transition-opacity group-hover:opacity-100" />
+          <div
+            className="icon-tile relative h-16 w-16"
+            style={{
+              background: 'linear-gradient(135deg, rgba(100,149,237,0.25), rgba(100,149,237,0.05))',
+              border: '1px solid rgba(100,149,237,0.4)',
+              boxShadow: '0 8px 24px rgba(100,149,237,0.25)',
+            }}
+          >
+            <FolderPlus size={32} className="text-[#6495ED] drop-shadow-[0_0_8px_rgba(100,149,237,0.6)]" />
+          </div>
+          <div className="relative">
+            <h3 className="text-lg font-extrabold tracking-wide" style={{ color: 'var(--text-primary)' }}>NEW CASE</h3>
+            <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Start a new forensic case</p>
           </div>
         </button>
-        <button onClick={handleOpenCase}
-          className="card flex flex-col items-center gap-3 p-8 text-center transition hover:border-green-500">
-          <div className="rounded-xl p-4" style={{ background: 'rgba(34,197,94,0.1)' }}><FolderOpen size={32} className="text-green-400" /></div>
-          <div>
-            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>LOAD EXISTING</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Resume work on a case</p>
+        <button
+          onClick={handleOpenCase}
+          className="card group relative flex flex-col items-center gap-3 overflow-hidden p-8 text-center transition-all hover:scale-[1.01] hover:border-green-500"
+        >
+          <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-green-500/15 blur-2xl" />
+          <div
+            className="icon-tile relative h-16 w-16"
+            style={{
+              background: 'linear-gradient(135deg, rgba(34,197,94,0.25), rgba(34,197,94,0.05))',
+              border: '1px solid rgba(34,197,94,0.4)',
+              boxShadow: '0 8px 24px rgba(34,197,94,0.25)',
+            }}
+          >
+            <FolderOpen size={32} className="text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
+          </div>
+          <div className="relative">
+            <h3 className="text-lg font-extrabold tracking-wide" style={{ color: 'var(--text-primary)' }}>LOAD EXISTING</h3>
+            <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Resume work on a case</p>
           </div>
         </button>
       </div>

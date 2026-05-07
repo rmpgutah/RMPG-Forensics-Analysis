@@ -26,11 +26,21 @@ export const SamsungUnlock: React.FC = () => {
     setIsDetecting(true);
     addLog('Detecting COM port...');
     try {
-      const result = (await ipc.invoke(IPC_CHANNELS.SAMSUNG_DETECT_PORT)) as {
+      // Handler returns an array of {port, description} — multiple Samsung
+      // devices can be connected. Take the first; report total count so the
+      // user knows if they need to disambiguate manually.
+      const result = (await ipc.invoke(IPC_CHANNELS.SAMSUNG_DETECT_PORT)) as Array<{
         port: string;
-      };
-      setComPort(result.port);
-      addLog(`Detected port: ${result.port}`);
+        description: string;
+      }>;
+      if (!Array.isArray(result) || result.length === 0) {
+        addLog('No Samsung device detected on any COM port.');
+        return;
+      }
+      const first = result[0];
+      setComPort(first.port);
+      const extra = result.length > 1 ? ` (${result.length} ports found — using first)` : '';
+      addLog(`Detected port: ${first.port}${extra}`);
     } catch (err) {
       addLog(`Error detecting port: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

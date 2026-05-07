@@ -457,6 +457,7 @@ export const IosQuickExtract: React.FC = () => {
             )}
 
             <FolderPicker
+            role="output"
               label="Save backup & extracted data to"
               value={outputFolder}
               onChange={setOutputFolder}
@@ -579,12 +580,14 @@ export const IosQuickExtract: React.FC = () => {
               </div>
             )}
             <FolderPicker
+            role="backup"
               label="iOS Backup Folder"
               value={backupPath}
               onChange={setBackupPath}
               disabled={running}
             />
             <FolderPicker
+            role="output"
               label="Save extracted data to (optional)"
               value={outputFolder}
               onChange={setOutputFolder}

@@ -138,7 +138,7 @@ export const IosAppData: React.FC = () => {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_APP_DATA, {
         backupPath,
       }) as { apps: AppRecord[]; stats: AppDataStats };
-      setApps(result.apps);
+      setApps(result.apps ?? []);
       setStats(result.stats);
     } catch (err) {
       console.error('App scan failed:', err);
@@ -198,7 +198,10 @@ export const IosAppData: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_APP_DATA_PROGRESS, (_event: unknown, data: Record<string, unknown>) => {
+    // preload `api.on` invokes callback as `callback(...args)` — no event
+    // arg. Old `(_event, data)` made `data` undefined → progress stuck.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_APP_DATA_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? {}) as Record<string, unknown>;
       const pct = typeof data.percent === 'number' ? data.percent : 0;
       setExtractProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
       if (pct >= 100) setExtracting(false);
@@ -351,7 +354,19 @@ export const IosAppData: React.FC = () => {
       {/* App List */}
       {filteredApps.length > 0 && (
         <div className="space-y-2">
-          {filteredApps.map((app) => {
+          {filteredApps.map((rawApp) => {
+            // Defensive: the iOS app-data IPC sometimes returns app records
+            // with one or more of these arrays undefined (e.g. apps with no
+            // accessible Documents/, partial scrapes, sandbox permission
+            // denials). Spreading undefined throws "Cannot read properties of
+            // undefined (reading 'length')" — normalize once here so every
+            // downstream `.length` / `.map` / `.slice` is safe.
+            const app = {
+              ...rawApp,
+              documents: rawApp.documents ?? [],
+              caches: rawApp.caches ?? [],
+              databases: rawApp.databases ?? [],
+            };
             const isExpanded = expandedApps.has(app.id);
             const allFiles = [...app.documents, ...app.caches, ...app.databases];
 

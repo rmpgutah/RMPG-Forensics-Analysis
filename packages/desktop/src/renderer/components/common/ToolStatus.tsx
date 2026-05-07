@@ -8,6 +8,18 @@ interface ToolStatusProps {
   description?: string;
 }
 
+/**
+ * Tool version strings come in many shapes: "Android Debug Bridge version
+ * 1.0.41", "tesseract 5.5.2", "openjdk version "21.0.1" 2024-10-15", or just
+ * "3.12.4". Extract the first dotted-numeric token and prefix exactly one
+ * "v" — never prepend "v" to whatever the binary printed (which can include
+ * runtime errors when the tool is a broken stub).
+ */
+function formatVersion(raw: string): string {
+  const match = raw.match(/(\d+\.[\d.]+)/);
+  return match ? `v${match[1]}` : raw;
+}
+
 export const ToolStatus: React.FC<ToolStatusProps> = ({ toolName, label, description }) => {
   const [status, setStatus] = useState<'checking' | 'found' | 'missing'>('checking');
   const [version, setVersion] = useState<string>('');
@@ -52,7 +64,7 @@ export const ToolStatus: React.FC<ToolStatusProps> = ({ toolName, label, descrip
           {label || toolName}
         </div>
         {status === 'found' && version && (
-          <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>v{version}</div>
+          <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{formatVersion(version)}</div>
         )}
         {isMissing && (
           <div className="text-[11px] text-red-400">Not found in PATH</div>

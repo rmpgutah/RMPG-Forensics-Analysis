@@ -64,6 +64,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 // Case
 import { Dashboard } from './pages/Dashboard';
 import { CaseManager } from './pages/CaseManager';
+import { AcquisitionWizard } from './pages/AcquisitionWizard';
+import { CaseTimeline } from './pages/CaseTimeline';
 
 // Android Collections
 import { AdbBackup } from './pages/AdbBackup';
@@ -126,14 +128,16 @@ import { MvtScanner } from './pages/MvtScanner';
 import { HashGenerator } from './pages/HashGenerator';
 import { AbToTar } from './pages/AbToTar';
 import { SamsungUnlock } from './pages/SamsungUnlock';
+import { LockScreenRecovery } from './pages/LockScreenRecovery';
+import { EdlImager } from './pages/EdlImager';
+import { MtkClient } from './pages/MtkClient';
+import { IosBackupDecrypt } from './pages/IosBackupDecrypt';
 import { AcquisitionReport } from './pages/AcquisitionReport';
 import { JadxDecompiler } from './pages/JadxDecompiler';
 import { SqliteBrowser } from './pages/SqliteBrowser';
 import { ExifViewer } from './pages/ExifViewer';
 
-// Breach & Bypass
-import { LockScreenRecovery } from './pages/LockScreenRecovery';
-import { EdlImager } from './pages/EdlImager';
+// Breach & Bypass (origin/main side)
 import { MtkImager } from './pages/MtkImager';
 import { AdvancedDecrypt } from './pages/AdvancedDecrypt';
 import { BruteForceAttack } from './pages/BruteForceAttack';
@@ -150,6 +154,8 @@ import { PeopleSearch } from './pages/PeopleSearch';
 
 // Settings
 import { ToolConfiguration } from './pages/ToolConfiguration';
+import { Preferences } from './pages/Preferences';
+import { DecryptionTools } from './pages/DecryptionTools';
 import { SyncSettings } from './pages/SyncSettings';
 
 // ---------------------------------------------------------------------------
@@ -286,6 +292,8 @@ const App: React.FC = () => {
           {/* Case */}
           <Route path="/" element={<Dashboard />} />
           <Route path="/case-manager" element={<CaseManager />} />
+          <Route path="/acquisition-wizard" element={<AcquisitionWizard />} />
+          <Route path="/case-timeline" element={<CaseTimeline />} />
 
           {/* Android Collections */}
           <Route path="/android/adb-backup" element={<AdbBackup />} />
@@ -347,6 +355,10 @@ const App: React.FC = () => {
           <Route path="/tools/hash-generator" element={<HashGenerator />} />
           <Route path="/tools/ab-to-tar" element={<AbToTar />} />
           <Route path="/tools/samsung-unlock" element={<SamsungUnlock />} />
+          <Route path="/breach/lockscreen" element={<LockScreenRecovery />} />
+          <Route path="/breach/edl" element={<EdlImager />} />
+          <Route path="/breach/mtk" element={<MtkClient />} />
+          <Route path="/breach/ios-backup-decrypt" element={<IosBackupDecrypt />} />
           <Route path="/tools/acquisition-report" element={<AcquisitionReport />} />
           <Route path="/tools/jadx" element={<JadxDecompiler />} />
           <Route path="/tools/sqlite-browser" element={<SqliteBrowser />} />
@@ -373,6 +385,8 @@ const App: React.FC = () => {
 
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />
+          <Route path="/settings/preferences" element={<Preferences />} />
+          <Route path="/analysis/decryption" element={<DecryptionTools />} />
           <Route path="/settings/sync" element={<SyncSettings />} />
 
           {/* Downloads */}

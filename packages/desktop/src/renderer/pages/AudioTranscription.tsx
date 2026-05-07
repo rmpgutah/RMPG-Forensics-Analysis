@@ -32,6 +32,7 @@ export const AudioTranscription: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Input Folder (Opus Files)"
             value={inputFolder}
             onChange={setInputFolder}
@@ -39,6 +40,7 @@ export const AudioTranscription: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output Folder (Reports)"
             value={outputFolder}
             onChange={setOutputFolder}

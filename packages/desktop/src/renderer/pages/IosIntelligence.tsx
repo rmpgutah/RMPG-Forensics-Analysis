@@ -135,6 +135,7 @@ export const IosIntelligence: React.FC = () => {
       <div className="flex items-end gap-4">
         <div className="flex-1">
           <FolderPicker
+            role="backup"
             label="iOS Backup Directory"
             value={backupDir}
             onChange={setBackupDir}

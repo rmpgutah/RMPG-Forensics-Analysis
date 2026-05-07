@@ -36,6 +36,7 @@ export const WhatsAppMediaDecrypt: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Encrypted Media Folder"
             value={sourceFolder}
             onChange={setSourceFolder}
@@ -43,6 +44,7 @@ export const WhatsAppMediaDecrypt: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}

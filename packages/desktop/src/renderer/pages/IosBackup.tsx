@@ -12,7 +12,45 @@ import {
 import { useDeviceStatus, useProcess } from '../hooks';
 
 interface DeviceInfoResult {
-  [key: string]: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Render an arbitrary lockdown / device-info value safely.
+ *
+ * iOS lockdownd returns a heterogeneous plist tree — most values are strings,
+ * but some (e.g. WirelessCapabilities, USBMUXListenerSocket) are nested dicts
+ * or arrays. Passing those directly into JSX throws React error #31. We:
+ *   • render primitives verbatim,
+ *   • render arrays/objects as a collapsible <details> with pretty JSON
+ *     (preserves full forensic data — nothing silently truncated).
+ */
+function renderForensicValue(value: unknown): React.ReactNode {
+  if (value === null || value === undefined) return '';
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean' || t === 'bigint') {
+    return String(value);
+  }
+  // Object or array — collapsible to keep the panel scannable.
+  let pretty: string;
+  try {
+    pretty = JSON.stringify(value, null, 2);
+  } catch {
+    pretty = '[unserializable value]';
+  }
+  const summary = Array.isArray(value)
+    ? `Array (${value.length} items)`
+    : `Object (${Object.keys(value as object).length} keys)`;
+  return (
+    <details className="inline-block align-top">
+      <summary className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+        {summary}
+      </summary>
+      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-black/30 p-2 text-[10px] text-[var(--text-secondary)]">
+        {pretty}
+      </pre>
+    </details>
+  );
 }
 
 export const IosBackup: React.FC = () => {
@@ -120,6 +158,7 @@ export const IosBackup: React.FC = () => {
             </button>
 
             <FolderPicker
+            role="output"
               label="Backup Output Folder"
               value={outputFolder}
               onChange={setOutputFolder}
@@ -181,7 +220,9 @@ export const IosBackup: React.FC = () => {
                       <span className="shrink-0 font-medium text-[var(--text-secondary)] w-40 truncate">
                         {key}
                       </span>
-                      <span className="text-[var(--text-primary)] break-all">{value}</span>
+                      <span className="text-[var(--text-primary)] break-all">
+                        {renderForensicValue(value)}
+                      </span>
                     </div>
                   ))}
                 </div>

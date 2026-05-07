@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import type { ProcessProgress } from '@rmpg/shared';
@@ -211,10 +212,22 @@ export function registerWhatsAppParserHandlers(): void {
 
         sendProgress(`Generating report for ${chats.length} chats...`);
 
+        // Same defensive folder→file resolution as media report — the
+        // generator writes a single HTML file but renderer pages typically
+        // pass an output folder. Drop a timestamped report inside if so.
+        let reportFile = outputPath;
+        try {
+          const st = await fs.stat(outputPath);
+          if (st.isDirectory()) {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            reportFile = path.join(outputPath, `whatsapp-report-${stamp}.html`);
+          }
+        } catch { /* path doesn't exist; pass through */ }
+
         const reportPath = await reportGenerator.generateWhatsAppReport({
           chats,
           messages,
-          outputPath,
+          outputPath: reportFile,
           title: title ?? 'WhatsApp Forensic Report',
         });
 

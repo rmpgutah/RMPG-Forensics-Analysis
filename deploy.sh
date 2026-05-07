@@ -40,15 +40,17 @@ DEPLOY_GITHUB_REPO="${DEPLOY_GITHUB_REPO:-}"
 BUMP="patch"
 SKIP_BUMP=false
 DRY_RUN=false
+PAGE_ONLY=false
 
 for arg in "$@"; do
   case "$arg" in
     patch|minor|major) BUMP="$arg" ;;
     --no-bump)  SKIP_BUMP=true ;;
     --dry-run)  DRY_RUN=true ;;
+    --page-only) PAGE_ONLY=true ;;  # Skip build/package; only push the landing page
     *)
       echo "Unknown argument: $arg"
-      echo "Usage: ./deploy.sh [patch|minor|major|--no-bump] [--dry-run]"
+      echo "Usage: ./deploy.sh [patch|minor|major|--no-bump] [--dry-run] [--page-only]"
       exit 1
       ;;
   esac
@@ -65,6 +67,29 @@ step() { echo -e "\n${BLUE}── $1 ──${NC}"; }
 ok()   { echo -e "${GREEN}  ✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}  ⚠ $1${NC}"; }
 fail() { echo -e "${RED}  ✗ $1${NC}"; exit 1; }
+
+# ── Short-circuit: --page-only ───────────────────────────────────────────────
+# When the user just wants to refresh the downloads landing page without
+# rebuilding/repackaging the whole Electron app (10+ minute job), skip
+# straight to the page upload. The page reads latest-mac.yml at runtime
+# so it stays in sync with whatever artefacts are already on the server.
+if [[ "$PAGE_ONLY" == true ]]; then
+  step "Page-only deploy"
+  if [[ -z "${DEPLOY_SSH_USER:-}" ]]; then
+    fail "DEPLOY_SSH_USER not set in deploy.config"
+  fi
+  PAGE_PATH="${SCRIPT_DIR}/downloads-page/index.html"
+  [[ -f "$PAGE_PATH" ]] || fail "Landing page not found at ${PAGE_PATH}"
+  PAGE_REMOTE="$(dirname "${DEPLOY_REMOTE_PATH}")"
+  SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+  [[ -n "${DEPLOY_SSH_KEY:-}" ]] && SSH_OPTS="$SSH_OPTS -i $DEPLOY_SSH_KEY"
+  echo "  Pushing ${PAGE_PATH} → ${DEPLOY_SSH_HOST}:${PAGE_REMOTE}/index.html"
+  ssh $SSH_OPTS "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "mkdir -p ${PAGE_REMOTE}"
+  rsync -az --partial -e "ssh $SSH_OPTS" "$PAGE_PATH" \
+    "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${PAGE_REMOTE}/index.html"
+  ok "Landing page deployed → https://${DEPLOY_SSH_HOST}/downloads/"
+  exit 0
+fi
 
 # ── Step 1: Version bump ──────────────────────────────────────────────────────
 step "Step 1: Version"
@@ -139,12 +164,56 @@ if [[ -n "$DEPLOY_SSH_USER" ]]; then
   fi
   # Ensure remote directory exists
   ssh $SSH_OPTS "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "mkdir -p ${DEPLOY_REMOTE_PATH}"
-  # Upload all release files
-  rsync -avz --progress -e "ssh $SSH_OPTS" \
-    "$RELEASE_DIR/" \
-    "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_PATH}/"
+  # Upload all release files. Wrap rsync in a retry loop with --partial so
+  # transient SSH drops (the host is on a slow link and times out at ~80%
+  # of large files) recover automatically instead of needing a manual
+  # `./deploy.sh --no-bump`. SSH-level keepalives prevent silent stalls
+  # being mistaken for "still working" and timing out at the OS layer.
+  RSYNC_FLAGS=(-az --partial --append-verify --progress
+    --timeout=180  # rsync-side timeout if no traffic for 3min → exit non-zero so we retry
+  )
+  RSYNC_SSH=("ssh" $SSH_OPTS
+    -o ServerAliveInterval=15
+    -o ServerAliveCountMax=4
+    -o ConnectTimeout=30)
+  attempt=1
+  max_attempts=10
+  while (( attempt <= max_attempts )); do
+    if rsync "${RSYNC_FLAGS[@]}" -e "${RSYNC_SSH[*]}" \
+        "$RELEASE_DIR/" \
+        "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_PATH}/"; then
+      break
+    fi
+    rc=$?
+    if (( attempt == max_attempts )); then
+      echo "  rsync failed after ${max_attempts} attempts (last exit ${rc})." >&2
+      exit $rc
+    fi
+    backoff=$(( attempt * 10 ))
+    echo "  rsync attempt ${attempt} exited ${rc}; resuming in ${backoff}s…"
+    sleep "$backoff"
+    attempt=$(( attempt + 1 ))
+  done
   ok "Uploaded via rsync → ${DEPLOY_SSH_HOST}:${DEPLOY_REMOTE_PATH}"
   UPLOADED=true
+
+  # ── 5a-bis. Push the downloads landing page ─────────────────────────────
+  # Upload `downloads-page/index.html` to the parent of $DEPLOY_REMOTE_PATH
+  # (so artefacts live at /downloads/updates/ and the landing page lives
+  # at /downloads/index.html). The page reads /downloads/updates/latest-mac.yml
+  # at runtime to display the current version + file sizes, so the only
+  # time we re-deploy the page is when its layout changes.
+  PAGE_PATH="${SCRIPT_DIR}/downloads-page/index.html"
+  if [[ -f "$PAGE_PATH" ]]; then
+    PAGE_REMOTE="$(dirname "${DEPLOY_REMOTE_PATH}")"  # /var/www/.../downloads
+    echo "  Pushing landing page → ${PAGE_REMOTE}/index.html"
+    if rsync -az --partial -e "${RSYNC_SSH[*]}" "$PAGE_PATH" \
+        "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${PAGE_REMOTE}/index.html"; then
+      ok "Landing page deployed."
+    else
+      echo "  ⚠ Landing page upload failed (artefacts already up-to-date)."
+    fi
+  fi
 fi
 
 # ── 5b. FTP fallback ─────────────────────────────────────────────────────────

@@ -5,7 +5,12 @@ import type { LogEntry } from '../../types/global';
 type LogItem = LogEntry | string;
 
 interface LogConsoleProps {
-  logs: LogItem[];
+  /** May be undefined when the parent forgets to pass it (e.g. a hook
+   *  return that hadn't been destructured cleanly). We coerce to []
+   *  in the body so the component never crashes from missing input —
+   *  the WhatsAppParser page surfaced this when its `useIpc()` returned
+   *  no `logs` field, taking the entire renderer down. */
+  logs?: LogItem[] | null;
   maxHeight?: string;
   onClear?: () => void;
   title?: string;
@@ -74,11 +79,17 @@ function normalise(item: LogItem): {
 }
 
 export const LogConsole: React.FC<LogConsoleProps> = ({
-  logs,
+  logs: rawLogs,
   maxHeight = '300px',
   onClear,
   title = 'Console Output',
 }) => {
+  // Coerce missing/null/non-array inputs to []. Several pages (WhatsApp
+  // Parser, AcquisitionWizard wired through useIpc) can pass undefined
+  // when a hook hasn't initialised yet — without this guard every
+  // `logs.filter` call below threw and bubbled up to the page error
+  // boundary, blanking the entire route.
+  const logs: LogItem[] = Array.isArray(rawLogs) ? rawLogs : [];
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,7 +111,7 @@ export const LogConsole: React.FC<LogConsoleProps> = ({
   const errorCount = logs.filter((l) => typeof l !== 'string' && (l as LogEntry).level === 'error').length;
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-950">
+    <div className="log-console rounded-lg border border-slate-700 bg-slate-950">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
         <div className="flex items-center gap-2 text-sm text-slate-400">

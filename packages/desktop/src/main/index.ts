@@ -89,10 +89,26 @@ function setupAutoUpdater(): void {
     mainWindow?.webContents.send('update:error', { message: err.message });
   });
 
-  // Check for updates once the window is shown, then every 4 hours
-  app.once('browser-window-show', () => {
-    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
-  });
+  // Check for updates once the window is shown, then every 4 hours.
+  // `app.on('browser-window-show', ...)` was the original here but that's
+  // not a valid Electron `app` event — TypeScript rejected it and the
+  // initial check never fired. The right hook is BrowserWindow.on('show').
+  // We attach lazily because `mainWindow` may not exist yet when this runs.
+  const attachInitialCheck = (): void => {
+    if (!mainWindow) {
+      setTimeout(attachInitialCheck, 200);
+      return;
+    }
+    mainWindow.once('show', () => {
+      setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+    });
+    // If the window was already visible by the time we attached, the
+    // `show` event won't fire — kick off the check now so we still run.
+    if (mainWindow.isVisible()) {
+      setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 5000);
+    }
+  };
+  attachInitialCheck();
   setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
 
   // Allow renderer to trigger install

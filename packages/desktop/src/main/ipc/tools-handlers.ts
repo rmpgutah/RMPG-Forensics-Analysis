@@ -14,6 +14,13 @@ import { runCommandWithProgress } from '../services/process-runner';
 interface BrewRecipe {
   type: 'brew';
   package: string;
+  /**
+   * For "keg-only" brew formulae (like `openjdk`) Homebrew installs the binary
+   * but does NOT symlink it into /opt/homebrew/bin. Listing the binaries here
+   * causes the installer to create symlinks from `/<brew-prefix>/bin/<name>`
+   * → `/<brew-prefix>/opt/<package>/bin/<name>` after install.
+   */
+  postInstallSymlinks?: string[];
 }
 
 interface PipRecipe {
@@ -50,7 +57,10 @@ const INSTALL_RECIPES: Record<string, ToolInstallInfo> = {
     note: 'ADB is part of Android Platform Tools',
   },
   java: {
-    darwin: { type: 'brew', package: 'openjdk' },
+    // openjdk is keg-only on Homebrew (Apple's /usr/bin/java stub takes
+    // precedence), so the formula installs to /opt/homebrew/opt/openjdk/bin/
+    // but never reaches PATH. We post-install symlink it ourselves.
+    darwin: { type: 'brew', package: 'openjdk', postInstallSymlinks: ['java', 'javac', 'jar', 'jshell'] },
     linux: { type: 'url', url: 'https://adoptium.net/en-GB/temurin/releases/', label: 'Eclipse Temurin JRE' },
     win32: { type: 'winget', id: 'EclipseAdoptium.Temurin.21.JRE' },
     note: 'Java Runtime Environment — required for IPED and AB→TAR conversion',
@@ -72,6 +82,30 @@ const INSTALL_RECIPES: Record<string, ToolInstallInfo> = {
     linux: { type: 'pip', package: 'instaloader' },
     win32: { type: 'pip', package: 'instaloader' },
     note: 'Requires Python to be installed first',
+  },
+
+  // Breach & Bypass — Qualcomm EDL Mode imager
+  edl: {
+    darwin: { type: 'pip', package: 'edlclient' },
+    linux: { type: 'pip', package: 'edlclient' },
+    win32: { type: 'pip', package: 'edlclient' },
+    note: 'EDL (Emergency Download Mode) tool — Qualcomm chipset bootrom imager. Requires Python and (on Linux/macOS) usbserial drivers.',
+  },
+
+  // Breach & Bypass — MediaTek BROM exploit
+  mtk: {
+    darwin: { type: 'pip', package: 'mtkclient' },
+    linux: { type: 'pip', package: 'mtkclient' },
+    win32: { type: 'pip', package: 'mtkclient' },
+    note: 'mtkclient — MediaTek BROM exploit + Preloader/DA mode tool. On Windows, requires the MTK USB driver.',
+  },
+
+  // Breach & Bypass — iOS encrypted backup decryptor
+  iphone_backup_decrypt: {
+    darwin: { type: 'pip', package: 'iphone_backup_decrypt' },
+    linux: { type: 'pip', package: 'iphone_backup_decrypt' },
+    win32: { type: 'pip', package: 'iphone_backup_decrypt' },
+    note: 'iOS encrypted backup decryptor + keychain extractor (pip iphone_backup_decrypt).',
   },
   idevice_id: {
     darwin: { type: 'brew', package: 'libimobiledevice' },
@@ -218,6 +252,31 @@ export function registerToolsHandlers(): void {
 
           if (result.exitCode !== 0) {
             throw new Error(result.stderr.trim() || result.stdout.trim() || 'brew install failed');
+          }
+
+          // Post-install symlinks for keg-only formulae (e.g. openjdk).
+          if (installRecipe.postInstallSymlinks?.length) {
+            const path = await import('path');
+            const fs = await import('fs/promises');
+            const brewPrefix = path.dirname(path.dirname(brewPath)); // /opt/homebrew/bin/brew → /opt/homebrew
+            const optDir = path.join(brewPrefix, 'opt', installRecipe.package, 'bin');
+            const binDir = path.join(brewPrefix, 'bin');
+            for (const name of installRecipe.postInstallSymlinks) {
+              const src = path.join(optDir, name);
+              const dst = path.join(binDir, name);
+              try {
+                await fs.access(src);
+                // Remove any existing entry first; ignore failure (likely doesn't exist).
+                try { await fs.unlink(dst); } catch { /* ignore */ }
+                await fs.symlink(src, dst);
+                sendProgress(`Linked ${name} → ${src}`, 90);
+              } catch (linkErr) {
+                // Don't fail the whole install over a single missing binary —
+                // some formulae don't ship every entry (e.g. JRE-only builds
+                // skip javac). Surface a warning and continue.
+                sendProgress(`Skipped ${name}: ${(linkErr as Error).message}`, 90);
+              }
+            }
           }
 
           sendProgress(`${toolName} installed successfully via Homebrew.`, 100);

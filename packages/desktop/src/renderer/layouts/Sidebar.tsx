@@ -3,6 +3,8 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
+  Wand2,
+  History,
   Smartphone,
   Info,
   FileOutput,
@@ -23,7 +25,6 @@ import {
   Lock,
   Image,
   FileText,
-  History,
   Mic,
   Merge,
   Apple,
@@ -35,6 +36,7 @@ import {
   MapPin,
   ScanSearch,
   ShieldAlert,
+  KeyRound,
   Hash,
   FileArchive,
   Unlock,
@@ -44,6 +46,7 @@ import {
   Zap,
   FileImage,
   Settings,
+  Sliders,
   RefreshCw,
   ChevronDown,
   ChevronRight,
@@ -67,6 +70,9 @@ import {
   Users,
   Terminal,
   Download,
+  Cpu,
+  MemoryStick,
+  ShieldOff,
 } from 'lucide-react';
 import { APP_VERSION } from '@rmpg/shared';
 
@@ -88,6 +94,8 @@ const navSections: NavSection[] = [
     items: [
       { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={16} /> },
       { label: 'Case Manager', path: '/case-manager', icon: <FolderKanban size={16} /> },
+      { label: 'Acquisition Wizard', path: '/acquisition-wizard', icon: <Wand2 size={16} /> },
+      { label: 'Case Timeline', path: '/case-timeline', icon: <History size={16} /> },
     ],
   },
   {
@@ -156,6 +164,17 @@ const navSections: NavSection[] = [
       { label: 'Geolocation Mapper', path: '/analysis/geolocation', icon: <MapPin size={16} /> },
       { label: 'Image Finder', path: '/analysis/image-finder', icon: <ScanSearch size={16} />, badge: 'BETA' },
       { label: 'MVT Scanner', path: '/analysis/mvt-scanner', icon: <ShieldAlert size={16} /> },
+      { label: 'Decryption', path: '/analysis/decryption', icon: <KeyRound size={16} /> },
+    ],
+  },
+  {
+    title: 'Breach & Bypass',
+    items: [
+      { label: 'Lock Screen Recovery', path: '/breach/lockscreen', icon: <ShieldOff size={16} /> },
+      { label: 'EDL Imager (Qualcomm)', path: '/breach/edl', icon: <Cpu size={16} /> },
+      { label: 'MTK Imager (MediaTek)', path: '/breach/mtk', icon: <MemoryStick size={16} /> },
+      { label: 'iOS Backup Decrypt', path: '/breach/ios-backup-decrypt', icon: <KeyRound size={16} /> },
+      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
     ],
   },
   {
@@ -206,6 +225,7 @@ const navSections: NavSection[] = [
   {
     title: 'Settings',
     items: [
+      { label: 'Preferences', path: '/settings/preferences', icon: <Sliders size={16} /> },
       { label: 'Tool Configuration', path: '/settings/tools', icon: <Settings size={16} /> },
       { label: 'Sync Settings', path: '/settings/sync', icon: <RefreshCw size={16} /> },
     ],
@@ -255,15 +275,34 @@ const SidebarSection: React.FC<{
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="flex h-full w-[260px] flex-col shadow-xl" style={{ background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)' }}>
+    <aside
+      className="relative flex h-full w-[260px] flex-col shadow-xl"
+      style={{
+        background: 'linear-gradient(180deg, color-mix(in srgb, var(--bg-secondary) 96%, transparent), var(--bg-secondary))',
+        borderRight: '1px solid var(--border-color)',
+      }}
+    >
+      {/* vertical accent line on the right edge */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-px"
+        style={{ background: 'linear-gradient(180deg, transparent, rgba(100,149,237,0.35), transparent)' }} />
+
       {/* Brand */}
-      <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid var(--border-color)' }}>
-        <div className="rounded-lg bg-[#6495ED]/15 p-2">
-          <Shield size={22} className="text-[#6495ED]" />
+      <div className="relative flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid var(--border-color)' }}>
+        <div className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-[#6495ED]/50 to-transparent" />
+        <div className="relative">
+          <div className="absolute inset-0 -m-1 rounded-xl bg-[#6495ED]/30 blur-md" />
+          <div className="relative rounded-xl p-[1.5px]" style={{ background: 'linear-gradient(135deg, #7EAAFF, #4A7BD9 60%, #ef4444)' }}>
+            <div className="rounded-[10px] bg-[#0f2238] p-2">
+              <Shield size={22} className="text-[#6495ED] drop-shadow-[0_0_6px_rgba(100,149,237,0.7)]" />
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>RMPG Forensics</h1>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-red-400">Analysis</p>
+        <div className="flex-1">
+          <h1 className="text-sm font-extrabold tracking-wide" style={{ color: 'var(--text-primary)' }}>RMPG Forensics</h1>
+          <div className="flex items-center gap-1.5">
+            <span className="h-1 w-1 rounded-full bg-red-400 animate-pulse" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-400">Analysis Suite</p>
+          </div>
         </div>
       </div>
 
@@ -279,8 +318,9 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Version footer */}
-      <div className="px-4 py-2 text-center text-[10px]" style={{ borderTop: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-        RMPG Forensics Analysis v{APP_VERSION}
+      <div className="relative px-4 py-2.5 text-center text-[10px]" style={{ borderTop: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#6495ED]/40 to-transparent" />
+        <span className="font-mono">RMPG Forensics</span> <span className="text-[#6495ED]">v{APP_VERSION}</span>
       </div>
     </aside>
   );

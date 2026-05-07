@@ -131,6 +131,7 @@ export const JadxDecompiler: React.FC = () => {
             />
 
             <FolderPicker
+            role="output"
               label="Output Directory"
               value={outputDir}
               onChange={setOutputDir}

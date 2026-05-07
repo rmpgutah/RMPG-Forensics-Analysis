@@ -40,6 +40,7 @@ export const IpedIntegration: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Evidence Source Folder"
             value={evidenceFolder}
             onChange={setEvidenceFolder}
@@ -47,6 +48,7 @@ export const IpedIntegration: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="IPED Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}

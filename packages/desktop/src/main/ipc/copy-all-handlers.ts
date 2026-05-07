@@ -20,14 +20,22 @@ export function registerCopyAllHandlers(): void {
     IPC_CHANNELS.BULK_COPY,
     async (
       _event,
+      // BulkCopy page sends `{serial, outputPath}` (defaulting to /sdcard/
+      // as the source). Older callers send `{serial, remotePath, localPath}`.
+      // Accept both — previously `localPath: undefined` made adb pull crash.
       options: {
         serial: string;
-        remotePath: string;
-        localPath: string;
+        remotePath?: string;
+        localPath?: string;
+        outputPath?: string;
         paths?: string[];
       }
     ) => {
-      const { serial, remotePath = '/sdcard/', localPath, paths } = options;
+      const { serial, paths } = options;
+      const remotePath = options.remotePath ?? '/sdcard/';
+      const localPath = options.localPath ?? options.outputPath;
+      if (!serial) throw new Error('No device selected.');
+      if (!localPath) throw new Error('No output folder selected.');
       const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {

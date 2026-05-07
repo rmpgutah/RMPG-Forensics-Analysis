@@ -1,6 +1,6 @@
 {
   "name": "@rmpg/desktop",
-  "version": "1.0.43",
+  "version": "1.0.52",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -20,14 +20,19 @@
     "better-sqlite3": "^12.8.0",
     "electron-updater": "^6.8.3",
     "firebase": "^10.14.1",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "plist": "^3.1.0",
     "qrcode": "^1.5.4",
+    "react-leaflet": "^5.0.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/leaflet": "^1.9.21",
+    "@types/leaflet.markercluster": "^1.5.6",
     "@types/plist": "^3.0.5",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

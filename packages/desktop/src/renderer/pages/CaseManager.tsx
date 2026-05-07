@@ -182,6 +182,7 @@ export const CaseManager: React.FC = () => {
             </div>
           </div>
           <FolderPicker
+            role="case"
             label="Case Folder"
             value={newCaseFolder}
             onChange={setNewCaseFolder}

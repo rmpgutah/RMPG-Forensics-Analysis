@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bgL" cx="50%" cy="35%" r="85%">
+      <stop offset="0%"  stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#dde4f0"/>
+      <stop offset="100%" stop-color="#a8b3c8"/>
+    </radialGradient>
+    <filter id="grainL" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0.07  0 0 0 0 0.10  0 0 0 0 0.16  0 0 0 0.12 0"/>
+    </filter>
+    <linearGradient id="navyBanded" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#3057a0"/>
+      <stop offset="22%"  stop-color="#1a3358"/>
+      <stop offset="40%"  stop-color="#0d2240"/>
+      <stop offset="58%"  stop-color="#264a82"/>
+      <stop offset="78%"  stop-color="#0a1830"/>
+      <stop offset="100%" stop-color="#020812"/>
+    </linearGradient>
+    <linearGradient id="navyEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5a7cb0"/>
+      <stop offset="100%" stop-color="#020812"/>
+    </linearGradient>
+    <linearGradient id="specSweepL" x1="-0.2" y1="-0.5" x2="1.2" y2="0.6">
+      <stop offset="35%" stop-color="#9bb8ee" stop-opacity="0"/>
+      <stop offset="48%" stop-color="#cfdcf3" stop-opacity="0.6"/>
+      <stop offset="55%" stop-color="#9bb8ee" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="rimL" cx="50%" cy="50%" r="50%">
+      <stop offset="80%" stop-color="#0d2240" stop-opacity="0"/>
+      <stop offset="95%" stop-color="#0d2240" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#0d2240" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="topSheenL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#ffffff" stop-opacity="0.65"/>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="medCream" cx="38%" cy="30%" r="85%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="60%"  stop-color="#e8ecf3"/>
+      <stop offset="100%" stop-color="#aab3c5"/>
+    </radialGradient>
+    <linearGradient id="medGlassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="dropL" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
+      <feOffset dx="0" dy="18"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.4"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="bevelNavy" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
+      <feSpecularLighting in="b" surfaceScale="6" specularConstant="1.4"
+                          specularExponent="22" lighting-color="#bcd0f0" result="s">
+        <feDistantLight azimuth="225" elevation="48"/>
+      </feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="m"/>
+      <feComposite in="SourceGraphic" in2="m" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+    </filter>
+    <filter id="engraveL" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" result="b"/>
+      <feOffset in="b" dx="0" dy="-1" result="upHL"/>
+      <feFlood flood-color="#ffffff" flood-opacity="0.7" result="hi"/>
+      <feComposite in="hi" in2="upHL" operator="in" result="topHL"/>
+      <feOffset in="b" dx="0" dy="1" result="dnSh"/>
+      <feFlood flood-color="#0d2240" flood-opacity="0.55" result="lo"/>
+      <feComposite in="lo" in2="dnSh" operator="in" result="botSh"/>
+      <feMerge><feMergeNode in="botSh"/><feMergeNode in="SourceGraphic"/><feMergeNode in="topHL"/></feMerge>
+    </filter>
+
+    <clipPath id="sqL">
+      <rect x="32" y="32" width="960" height="960" rx="220" ry="220"/>
+    </clipPath>
+    <symbol id="starL" overflow="visible">
+      <polygon points="0,-330 80,-105 320,-105 130,40 200,275 0,135 -200,275 -130,40 -320,-105 -80,-105"/>
+    </symbol>
+  </defs>
+
+  <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="url(#bgL)"/>
+  <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="#000" filter="url(#grainL)" opacity="0.4"/>
+
+  <g clip-path="url(#sqL)" opacity="0.13" transform="translate(512 540)" stroke="#0d2240" fill="none" stroke-linecap="round" stroke-width="6">
+    <path d="M0 -340 C -210 -340 -340 -210 -340 0 C -340 210 -210 340 0 340"/>
+    <path d="M0 -280 C -170 -280 -280 -170 -280 0 C -280 170 -170 280 0 280"/>
+    <path d="M0 -220 C -130 -220 -220 -130 -220 0 C -220 130 -130 220 0 220"/>
+    <path d="M0 -340 C 210 -340 340 -210 340 0 C 340 210 210 340 0 340"/>
+    <path d="M0 -280 C 170 -280 280 -170 280 0 C 280 170 170 280 0 280"/>
+  </g>
+
+  <g clip-path="url(#sqL)" opacity="0.4">
+    <circle cx="512" cy="512" r="438" fill="none" stroke="#0d2240" stroke-width="2" stroke-dasharray="2 9"/>
+    <circle cx="512" cy="512" r="392" fill="none" stroke="#0d2240" stroke-width="1" opacity="0.6"/>
+  </g>
+  <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="url(#rimL)"/>
+
+  <g transform="translate(512 520)" filter="url(#dropL)">
+    <use href="#starL" fill="url(#navyBanded)" stroke="url(#navyEdge)" stroke-width="6" stroke-linejoin="round"/>
+    <use href="#starL" fill="url(#navyBanded)" filter="url(#bevelNavy)"/>
+    <use href="#starL" fill="url(#specSweepL)" opacity="0.9"/>
+
+    <polygon points="0,-298 70,-95 286,-95 116,38 178,248 0,120 -178,248 -116,38 -286,-95 -70,-95"
+             fill="none" stroke="#ffffff" stroke-opacity="0.20" stroke-width="2.5"/>
+
+    <circle cx="0"   cy="-310" r="5" fill="#cfdcf3" opacity="0.85"/>
+    <circle cx="304" cy="-92"  r="4" fill="#cfdcf3" opacity="0.7"/>
+    <circle cx="-304" cy="-92" r="4" fill="#cfdcf3" opacity="0.7"/>
+
+    <!-- cream medallion -->
+    <circle r="118" fill="#0d2240"/>
+    <circle r="115" fill="url(#medCream)"/>
+    <circle r="115" fill="none" stroke="#0d2240" stroke-width="6"/>
+    <circle r="103" fill="none" stroke="#0d2240" stroke-opacity="0.18" stroke-width="1.5"/>
+    <ellipse cx="0" cy="-30" rx="92" ry="58" fill="url(#medGlassL)" opacity="0.7"/>
+    <ellipse cx="-30" cy="-58" rx="40" ry="14" fill="#fff" opacity="0.6"/>
+
+    <g stroke="#0d2240" fill="none" stroke-linecap="round" filter="url(#engraveL)">
+      <path d="M -78 28 C -78 -52, -42 -88, 0 -88 C 42 -88, 78 -52, 78 28" stroke-width="5" stroke-dasharray="160 5 60 0"/>
+      <path d="M -62 32 C -62 -42, -32 -72, 0 -72 C 32 -72, 62 -42, 62 32" stroke-width="5"/>
+      <path d="M -46 36 C -46 -32, -22 -56, 0 -56 C 22 -56, 46 -32, 46 36" stroke-width="5" stroke-dasharray="20 6 200"/>
+      <path d="M -30 40 C -30 -22, -14 -40, 0 -40 C 14 -40, 30 -22, 30 40" stroke-width="4.5"/>
+      <path d="M -14 42 C -14 -12, -6 -24, 0 -24 C 6 -24, 14 -12, 14 42" stroke-width="4"/>
+      <path d="M -88 50 L -64 56" stroke-width="4"/>
+      <path d="M  88 50 L  64 56" stroke-width="4"/>
+      <circle cx="0" cy="-2" r="3" fill="#0d2240" stroke="none"/>
+    </g>
+  </g>
+
+  <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="url(#topSheenL)"/>
+  <rect x="33" y="33" width="958" height="958" rx="219" ry="219" fill="none" stroke="#0d2240" stroke-opacity="0.18" stroke-width="2"/>
+</svg>

@@ -124,12 +124,23 @@ export const OcrProcessing: React.FC = () => {
                 </button>
               )}
             </div>
+            {/*
+              `wrap="off"` keeps OCR output line-for-line with the source
+              document — long table rows and pre-formatted blocks scroll
+              horizontally instead of soft-wrapping, which would otherwise
+              shred the column layout. `whiteSpace: pre` matches that on
+              the rendering side. Tall default height so multi-page docs
+              show enough context without immediate scrolling.
+            */}
             <textarea
               value={extractedText}
               onChange={(e) => setExtractedText(e.target.value)}
               placeholder="OCR results will appear here..."
               readOnly={process.isRunning}
-              className="h-[350px] w-full resize-none rounded-md border border-[var(--border-color)] bg-[var(--bg-primary)] p-3 font-mono text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#6495ED]/50"
+              wrap="off"
+              spellCheck={false}
+              style={{ whiteSpace: 'pre', tabSize: 4 }}
+              className="h-[520px] w-full resize-y overflow-auto rounded-md border border-[var(--border-color)] bg-[var(--bg-primary)] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#6495ED]/50"
             />
           </div>
         </div>

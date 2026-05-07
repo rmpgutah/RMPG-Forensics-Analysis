@@ -26,6 +26,12 @@ export function runCommand(
       // so that .cmd/.bat wrappers (e.g. adb.cmd) are resolved correctly.
       shell: options?.shell ?? (isWindows() && !binary.includes('\\') && !binary.includes('/')),
       windowsHide: true,
+      // Explicit stdio: ignore stdin (we never write to children), pipe
+      // stdout/stderr so we can capture them. Without `'ignore'` for
+      // stdin, Node tries to attach the parent's stdin FD — which in a
+      // Finder-launched packaged Electron app is invalid, producing the
+      // mysterious "spawn EBADF" error that took down ADB across the app.
+      stdio: ['ignore', 'pipe', 'pipe'],
     };
 
     let child: ChildProcess;

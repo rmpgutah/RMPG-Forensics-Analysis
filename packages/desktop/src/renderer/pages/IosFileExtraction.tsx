@@ -275,7 +275,10 @@ export const IosFileExtraction: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_FILE_EXTRACT_PROGRESS, (_event: unknown, data: ExtractionProgress) => {
+    // preload `api.on` callback gets `(...args)` — no event arg. The old
+    // `(_event, data)` capture made `data` undefined → progress stuck.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_FILE_EXTRACT_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? { percent: 0 }) as ExtractionProgress;
       setProgress(data);
       if (data.percent >= 100) setExtracting(false);
     });

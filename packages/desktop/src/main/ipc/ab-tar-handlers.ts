@@ -23,13 +23,22 @@ export function registerAbTarHandlers(): void {
     IPC_CHANNELS.AB_CONVERT,
     async (
       _event,
+      // AbToTar page sends `{ abFilePath, outputPath: <folder> }`. Older
+      // callers send `{ inputPath, outputPath: <file> }`. Accept both;
+      // resolve the output to a real .tar file path either way.
       options: {
-        inputPath: string;
+        inputPath?: string;
+        abFilePath?: string;
         outputPath: string;
         password?: string;
       }
     ) => {
-      const { inputPath, outputPath, password } = options;
+      const inputPath = options.inputPath ?? options.abFilePath;
+      const password = options.password;
+      if (!inputPath) throw new Error('No .ab file selected.');
+      let outputPath = options.outputPath;
+      if (!outputPath) throw new Error('No output path provided.');
+
       const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
@@ -48,7 +57,17 @@ export function registerAbTarHandlers(): void {
         throw new Error(`Input file not found: ${inputPath}`);
       });
 
-      // Ensure output directory exists
+      // If outputPath is a folder, write `<inputBase>.tar` inside it. abe
+      // writes to a single file, so a folder path would otherwise EISDIR.
+      try {
+        const st = await fs.stat(outputPath);
+        if (st.isDirectory()) {
+          const base = path.basename(inputPath, path.extname(inputPath));
+          outputPath = path.join(outputPath, `${base}.tar`);
+        }
+      } catch { /* path doesn't exist; treat as literal file path */ }
+
+      // Ensure parent directory exists
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
       sendProgress('Starting AB to TAR conversion...');
