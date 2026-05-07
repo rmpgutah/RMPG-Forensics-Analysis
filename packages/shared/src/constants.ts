@@ -252,6 +252,90 @@ export const IPC_CHANNELS = {
   // Auth extras
   AUTH_TRUST_DEVICE: 'auth:trust-device',
 
+  // iOS Backup Decrypt
+  IOS_BACKUP_DECRYPT: 'ios:backup-decrypt',
+  IOS_BACKUP_DECRYPT_PROGRESS: 'ios:backup-decrypt-progress',
+
+  // Lock Screen Recovery
+  LOCK_SCREEN_RECOVER: 'lock-screen:recover',
+  LOCK_SCREEN_RECOVER_PROGRESS: 'lock-screen:recover-progress',
+
+  // EDL Imager (Qualcomm)
+  EDL_READ: 'edl:read',
+  EDL_READ_PROGRESS: 'edl:read-progress',
+
+  // MTK Imager (MediaTek)
+  MTK_READ: 'mtk:read',
+  MTK_READ_PROGRESS: 'mtk:read-progress',
+
+  // Advanced Decrypt
+  ADVANCED_DECRYPT: 'advanced-decrypt:run',
+  ADVANCED_DECRYPT_PROGRESS: 'advanced-decrypt:run-progress',
+
+  // Brute Force Attack
+  BRUTE_FORCE: 'brute-force:run',
+  BRUTE_FORCE_PROGRESS: 'brute-force:run-progress',
+
+  // Network Breach
+  NETWORK_BREACH: 'network-breach:run',
+  NETWORK_BREACH_PROGRESS: 'network-breach:run-progress',
+
+  // Spy Tactical
+  SPY_TACTICAL: 'spy-tactical:run',
+  SPY_TACTICAL_PROGRESS: 'spy-tactical:run-progress',
+
+  // iOS Trust & Unlock Bypass
+  IOS_TRUST_BYPASS: 'ios-trust:bypass',
+  IOS_TRUST_BYPASS_PROGRESS: 'ios-trust:bypass-progress',
+
+  // Android ADB Bypass (no dev mode)
+  ANDROID_ADB_BYPASS: 'android-adb:bypass',
+  ANDROID_ADB_BYPASS_PROGRESS: 'android-adb:bypass-progress',
+
+  // Force Compliance (full data release)
+  FORCE_COMPLIANCE: 'compliance:force',
+  FORCE_COMPLIANCE_PROGRESS: 'compliance:force-progress',
+
+  // Live Device View (no backup needed)
+  LIVE_VIEW_BROWSE: 'live-view:browse',
+  LIVE_VIEW_READ_FILE: 'live-view:read-file',
+  LIVE_VIEW_READ_LOGS: 'live-view:read-logs',
+  LIVE_VIEW_STREAM: 'live-view:stream',
+  LIVE_VIEW_STREAM_PROGRESS: 'live-view:stream-progress',
+
+  // Selective Extraction (no full backup)
+  SELECTIVE_EXTRACT: 'selective:extract',
+  SELECTIVE_EXTRACT_PROGRESS: 'selective:extract-progress',
+  SELECTIVE_SCAN: 'selective:scan',
+
+  // Website Breach
+  WEB_BREACH: 'web-breach:run',
+  WEB_BREACH_PROGRESS: 'web-breach:run-progress',
+  WEB_BREACH_SCAN: 'web-breach:scan',
+
+  // PII Polling
+  PII_POLL: 'pii:poll',
+  PII_POLL_PROGRESS: 'pii:poll-progress',
+  PII_SCAN: 'pii:scan',
+
+  // People Search / Data Collection
+  PEOPLE_SEARCH: 'people:search',
+  PEOPLE_SEARCH_PROGRESS: 'people:search-progress',
+  PEOPLE_SEARCH_BATCH: 'people:search-batch',
+
+  // Python Security Toolkit (open-source tools integration)
+  TOOLKIT_RUN: 'toolkit:run',
+  TOOLKIT_PROGRESS: 'toolkit:run-progress',
+  TOOLKIT_INSTALL: 'toolkit:install',
+  TOOLKIT_STATUS: 'toolkit:status',
+
+  // App Downloads
+  DOWNLOAD_LIST: 'download:list',
+  DOWNLOAD_START: 'download:start',
+  DOWNLOAD_PROGRESS: 'download:progress',
+  DOWNLOAD_CANCEL: 'download:cancel',
+  DOWNLOAD_OPEN_FOLDER: 'download:open-folder',
+
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',

@@ -62,6 +62,11 @@ import {
   Clock,
   Brain,
   Bot,
+  Eye,
+  Target,
+  Users,
+  Terminal,
+  Download,
 } from 'lucide-react';
 import { APP_VERSION } from '@rmpg/shared';
 
@@ -154,15 +159,48 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    title: 'Breach & Bypass',
+    items: [
+      { label: 'Lock Screen Recovery', path: '/breach/lock-screen', icon: <Unlock size={16} /> },
+      { label: 'EDL Imager (Qualcomm)', path: '/breach/edl-imager', icon: <Smartphone size={16} /> },
+      { label: 'MTK Imager (MediaTek)', path: '/breach/mtk-imager', icon: <Smartphone size={16} /> },
+      { label: 'iOS Backup Decrypt', path: '/breach/ios-backup-decrypt', icon: <Lock size={16} /> },
+      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
+      { label: 'Advanced Decryption', path: '/breach/advanced-decrypt', icon: <Lock size={16} /> },
+      { label: 'Brute Force Attack', path: '/breach/brute-force', icon: <Unlock size={16} /> },
+      { label: 'Network Breach', path: '/breach/network-breach', icon: <Wifi size={16} /> },
+      { label: 'Spy Tactical', path: '/breach/spy-tactical', icon: <ScanSearch size={16} /> },
+      { label: 'iOS Trust & Unlock', path: '/breach/ios-trust-unlock', icon: <Apple size={16} /> },
+      { label: 'Android ADB Bypass', path: '/breach/android-bypass', icon: <Smartphone size={16} /> },
+      { label: 'Force Compliance', path: '/breach/force-compliance', icon: <DatabaseZap size={16} /> },
+      { label: 'Live Device View', path: '/breach/live-view', icon: <Eye size={16} /> },
+      { label: 'Selective Extraction', path: '/breach/selective-extraction', icon: <Target size={16} /> },
+      { label: 'Website Data Extract', path: '/breach/website-breach', icon: <Globe size={16} /> },
+      { label: 'PII Polling', path: '/breach/pii-polling', icon: <UserSearch size={16} /> },
+    ],
+  },
+  {
+    title: 'Intelligence & Data Collection',
+    items: [
+      { label: 'People Search', path: '/intel/people-search', icon: <Users size={16} /> },
+      { label: 'Python Security Toolkit', path: '/intel/python-toolkit', icon: <Terminal size={16} /> },
+    ],
+  },
+  {
     title: 'Miscellaneous Tools',
     items: [
       { label: 'Hash Calculator', path: '/tools/hash-generator', icon: <Hash size={16} /> },
       { label: 'AB to TAR Converter', path: '/tools/ab-to-tar', icon: <FileArchive size={16} /> },
-      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
       { label: 'Acquisition Report', path: '/tools/acquisition-report', icon: <FileSpreadsheet size={16} /> },
       { label: 'JADX Decompiler', path: '/tools/jadx', icon: <Code size={16} /> },
       { label: 'SQLite Browser', path: '/tools/sqlite-browser', icon: <DatabaseZap size={16} /> },
       { label: 'EXIF Viewer', path: '/tools/exif-viewer', icon: <FileImage size={16} /> },
+    ],
+  },
+  {
+    title: 'Downloads',
+    items: [
+      { label: 'App Downloads', path: '/downloads', icon: <Download size={16} /> },
     ],
   },
   {

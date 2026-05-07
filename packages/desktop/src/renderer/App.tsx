@@ -95,6 +95,7 @@ import { WhatsAppMerge } from './pages/WhatsAppMerge';
 // iOS Collections
 import { IosQuickExtract } from './pages/IosQuickExtract';
 import { IosBackup } from './pages/IosBackup';
+import { IosBackupDecrypt } from './pages/IosBackupDecrypt';
 import { IosFileExtraction } from './pages/IosFileExtraction';
 import { IosMessages } from './pages/IosMessages';
 import { IosCallHistory } from './pages/IosCallHistory';
@@ -129,6 +130,23 @@ import { AcquisitionReport } from './pages/AcquisitionReport';
 import { JadxDecompiler } from './pages/JadxDecompiler';
 import { SqliteBrowser } from './pages/SqliteBrowser';
 import { ExifViewer } from './pages/ExifViewer';
+
+// Breach & Bypass
+import { LockScreenRecovery } from './pages/LockScreenRecovery';
+import { EdlImager } from './pages/EdlImager';
+import { MtkImager } from './pages/MtkImager';
+import { AdvancedDecrypt } from './pages/AdvancedDecrypt';
+import { BruteForceAttack } from './pages/BruteForceAttack';
+import { NetworkBreach } from './pages/NetworkBreach';
+import { SpyTactical } from './pages/SpyTactical';
+import { IosTrustUnlock } from './pages/IosTrustUnlock';
+import { AndroidBypass } from './pages/AndroidBypass';
+import { ForceCompliance } from './pages/ForceCompliance';
+import { LiveDeviceView } from './pages/LiveDeviceView';
+import { SelectiveExtraction } from './pages/SelectiveExtraction';
+import { WebsiteBreach } from './pages/WebsiteBreach';
+import { PiiPolling } from './pages/PiiPolling';
+import { PeopleSearch } from './pages/PeopleSearch';
 
 // Settings
 import { ToolConfiguration } from './pages/ToolConfiguration';
@@ -195,6 +213,12 @@ const UpdateBanner: React.FC = () => {
 };
 
 // ---------------------------------------------------------------------------
+
+// Python Security Toolkit
+import { PythonToolkit } from './pages/PythonToolkit';
+
+// Downloads
+import { AppDownloads } from './pages/AppDownloads';
 
 const App: React.FC = () => {
   const { isLoggedIn, loading, checkStatus } = useAuthStore();
@@ -328,9 +352,31 @@ const App: React.FC = () => {
           <Route path="/tools/sqlite-browser" element={<SqliteBrowser />} />
           <Route path="/tools/exif-viewer" element={<ExifViewer />} />
 
+          {/* Breach & Bypass */}
+          <Route path="/breach/lock-screen" element={<LockScreenRecovery />} />
+          <Route path="/breach/edl-imager" element={<EdlImager />} />
+          <Route path="/breach/mtk-imager" element={<MtkImager />} />
+          <Route path="/breach/ios-backup-decrypt" element={<IosBackupDecrypt />} />
+          <Route path="/breach/advanced-decrypt" element={<AdvancedDecrypt />} />
+          <Route path="/breach/brute-force" element={<BruteForceAttack />} />
+          <Route path="/breach/network-breach" element={<NetworkBreach />} />
+          <Route path="/breach/spy-tactical" element={<SpyTactical />} />
+          <Route path="/breach/ios-trust-unlock" element={<IosTrustUnlock />} />
+          <Route path="/breach/android-bypass" element={<AndroidBypass />} />
+          <Route path="/breach/force-compliance" element={<ForceCompliance />} />
+          <Route path="/breach/live-view" element={<LiveDeviceView />} />
+          <Route path="/breach/selective-extraction" element={<SelectiveExtraction />} />
+          <Route path="/breach/website-breach" element={<WebsiteBreach />} />
+          <Route path="/breach/pii-polling" element={<PiiPolling />} />
+          <Route path="/intel/people-search" element={<PeopleSearch />} />
+          <Route path="/intel/python-toolkit" element={<PythonToolkit />} />
+
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />
           <Route path="/settings/sync" element={<SyncSettings />} />
+
+          {/* Downloads */}
+          <Route path="/downloads" element={<AppDownloads />} />
         </Route>
       </Routes>
     </HashRouter>
