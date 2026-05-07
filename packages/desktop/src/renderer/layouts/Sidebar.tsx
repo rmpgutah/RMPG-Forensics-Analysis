@@ -59,6 +59,7 @@ import {
   Users,
   Globe,
   Terminal,
+  Download,
 } from 'lucide-react';
 
 interface NavItem {
@@ -178,6 +179,12 @@ const navSections: NavSection[] = [
       { label: 'JADX Decompiler', path: '/tools/jadx', icon: <Code size={16} /> },
       { label: 'SQLite Browser', path: '/tools/sqlite-browser', icon: <DatabaseZap size={16} /> },
       { label: 'EXIF Viewer', path: '/tools/exif-viewer', icon: <FileImage size={16} /> },
+    ],
+  },
+  {
+    title: 'Downloads',
+    items: [
+      { label: 'App Downloads', path: '/downloads', icon: <Download size={16} /> },
     ],
   },
   {

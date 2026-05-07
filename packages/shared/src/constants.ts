@@ -294,6 +294,13 @@ export const IPC_CHANNELS = {
   TOOLKIT_INSTALL: 'toolkit:install',
   TOOLKIT_STATUS: 'toolkit:status',
 
+  // App Downloads
+  DOWNLOAD_LIST: 'download:list',
+  DOWNLOAD_START: 'download:start',
+  DOWNLOAD_PROGRESS: 'download:progress',
+  DOWNLOAD_CANCEL: 'download:cancel',
+  DOWNLOAD_OPEN_FOLDER: 'download:open-folder',
+
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',
