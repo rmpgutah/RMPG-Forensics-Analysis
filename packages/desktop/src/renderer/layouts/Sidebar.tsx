@@ -54,6 +54,11 @@ import {
   Eraser,
   Navigation,
   AppWindow,
+  Eye,
+  Target,
+  Users,
+  Globe,
+  Terminal,
 } from 'lucide-react';
 
 interface NavItem {
@@ -144,6 +149,24 @@ const navSections: NavSection[] = [
       { label: 'MTK Imager (MediaTek)', path: '/breach/mtk-imager', icon: <Smartphone size={16} /> },
       { label: 'iOS Backup Decrypt', path: '/breach/ios-backup-decrypt', icon: <Lock size={16} /> },
       { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
+      { label: 'Advanced Decryption', path: '/breach/advanced-decrypt', icon: <Lock size={16} /> },
+      { label: 'Brute Force Attack', path: '/breach/brute-force', icon: <Unlock size={16} /> },
+      { label: 'Network Breach', path: '/breach/network-breach', icon: <Wifi size={16} /> },
+      { label: 'Spy Tactical', path: '/breach/spy-tactical', icon: <ScanSearch size={16} /> },
+      { label: 'iOS Trust & Unlock', path: '/breach/ios-trust-unlock', icon: <Apple size={16} /> },
+      { label: 'Android ADB Bypass', path: '/breach/android-bypass', icon: <Smartphone size={16} /> },
+      { label: 'Force Compliance', path: '/breach/force-compliance', icon: <DatabaseZap size={16} /> },
+      { label: 'Live Device View', path: '/breach/live-view', icon: <Eye size={16} /> },
+      { label: 'Selective Extraction', path: '/breach/selective-extraction', icon: <Target size={16} /> },
+      { label: 'Website Data Extract', path: '/breach/website-breach', icon: <Globe size={16} /> },
+      { label: 'PII Polling', path: '/breach/pii-polling', icon: <UserSearch size={16} /> },
+    ],
+  },
+  {
+    title: 'Intelligence & Data Collection',
+    items: [
+      { label: 'People Search', path: '/intel/people-search', icon: <Users size={16} /> },
+      { label: 'Python Security Toolkit', path: '/intel/python-toolkit', icon: <Terminal size={16} /> },
     ],
   },
   {
