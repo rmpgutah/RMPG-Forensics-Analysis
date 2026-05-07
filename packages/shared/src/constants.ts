@@ -217,6 +217,22 @@ export const IPC_CHANNELS = {
   // WhatsApp Merge
   WHATSAPP_MERGE: 'whatsapp:merge',
 
+  // iOS Backup Decrypt
+  IOS_BACKUP_DECRYPT: 'ios:backup-decrypt',
+  IOS_BACKUP_DECRYPT_PROGRESS: 'ios:backup-decrypt-progress',
+
+  // Lock Screen Recovery
+  LOCK_SCREEN_RECOVER: 'lock-screen:recover',
+  LOCK_SCREEN_RECOVER_PROGRESS: 'lock-screen:recover-progress',
+
+  // EDL Imager (Qualcomm)
+  EDL_READ: 'edl:read',
+  EDL_READ_PROGRESS: 'edl:read-progress',
+
+  // MTK Imager (MediaTek)
+  MTK_READ: 'mtk:read',
+  MTK_READ_PROGRESS: 'mtk:read-progress',
+
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',

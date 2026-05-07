@@ -137,11 +137,20 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    title: 'Breach & Bypass',
+    items: [
+      { label: 'Lock Screen Recovery', path: '/breach/lock-screen', icon: <Unlock size={16} /> },
+      { label: 'EDL Imager (Qualcomm)', path: '/breach/edl-imager', icon: <Smartphone size={16} /> },
+      { label: 'MTK Imager (MediaTek)', path: '/breach/mtk-imager', icon: <Smartphone size={16} /> },
+      { label: 'iOS Backup Decrypt', path: '/breach/ios-backup-decrypt', icon: <Lock size={16} /> },
+      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
+    ],
+  },
+  {
     title: 'Miscellaneous Tools',
     items: [
       { label: 'Hash Calculator', path: '/tools/hash-generator', icon: <Hash size={16} /> },
       { label: 'AB to TAR Converter', path: '/tools/ab-to-tar', icon: <FileArchive size={16} /> },
-      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
       { label: 'Acquisition Report', path: '/tools/acquisition-report', icon: <FileSpreadsheet size={16} /> },
       { label: 'JADX Decompiler', path: '/tools/jadx', icon: <Code size={16} /> },
       { label: 'SQLite Browser', path: '/tools/sqlite-browser', icon: <DatabaseZap size={16} /> },
