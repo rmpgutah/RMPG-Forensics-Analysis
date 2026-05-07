@@ -114,6 +114,9 @@ import { SyncSettings } from './pages/SyncSettings';
 // Python Security Toolkit
 import { PythonToolkit } from './pages/PythonToolkit';
 
+// Downloads
+import { AppDownloads } from './pages/AppDownloads';
+
 const App: React.FC = () => {
   const { isLoggedIn, loading, checkStatus } = useAuthStore();
 
@@ -221,6 +224,9 @@ const App: React.FC = () => {
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />
           <Route path="/settings/sync" element={<SyncSettings />} />
+
+          {/* Downloads */}
+          <Route path="/downloads" element={<AppDownloads />} />
         </Route>
       </Routes>
     </HashRouter>

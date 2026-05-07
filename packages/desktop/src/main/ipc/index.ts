@@ -27,6 +27,7 @@ import { registerAuthHandlers } from './auth-handlers';
 import { registerMissingHandlers } from './missing-handlers';
 import { registerTacticalHandlers } from './tactical-handlers';
 import { registerPythonToolkitHandlers } from './python-toolkit-handlers';
+import { registerDownloadHandlers } from './download-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -115,6 +116,9 @@ export function registerAllIpcHandlers(): void {
 
   // Python security toolkit (Sherlock, theHarvester, Holehe, Maigret, etc.)
   registerPythonToolkitHandlers();
+
+  // App downloads management
+  registerDownloadHandlers();
 
   // Stub handlers for features not yet fully implemented
   registerMissingHandlers();
