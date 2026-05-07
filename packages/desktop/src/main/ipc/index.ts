@@ -25,6 +25,7 @@ import { registerToolsHandlers } from './tools-handlers';
 import { registerSyncHandlers } from './sync-handlers';
 import { registerAuthHandlers } from './auth-handlers';
 import { registerMissingHandlers } from './missing-handlers';
+import { registerTacticalHandlers } from './tactical-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -107,6 +108,9 @@ export function registerAllIpcHandlers(): void {
 
   // Authentication & 2FA
   registerAuthHandlers();
+
+  // Advanced tactical systems (decrypt, brute force, breach, spy, compliance, live view)
+  registerTacticalHandlers();
 
   // Stub handlers for features not yet fully implemented
   registerMissingHandlers();
