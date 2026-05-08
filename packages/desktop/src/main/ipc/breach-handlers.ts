@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import { resolveTool } from '../services/tool-resolver';
-import { runCommandWithProgress } from '../services/process-runner';
+import { runCommand, runCommandWithProgress } from '../services/process-runner';
 
 /**
  * Breach & Bypass IPC handlers.
@@ -261,6 +261,210 @@ ipcMain.handle(IPC_CHANNELS.IOS_BACKUP_DECRYPT, async (_e, opts: { backupDir: st
     args.push('--backup', opts.backupDir, '--keychain-only', '--output', opts.outputDir, '--password', opts.password);
   }
   return runWrappedCli({ toolName: 'iphone_backup_decrypt', args, progressChannel: IPC_CHANNELS.IOS_BACKUP_DECRYPT_PROGRESS });
+});
+
+// ============================================================================
+// Bridge handlers — the renderer pages use newer IPC channel names
+// (LOCK_SCREEN_RECOVER, EDL_READ, MTK_READ) that differ from the original
+// handler registrations above (LOCKSCREEN_RECOVER, EDL_IMAGE, MTK_DUMP).
+// These bridge handlers adapt the renderer's argument format and invoke the
+// same underlying logic so the sidebar features actually work.
+// ============================================================================
+
+async function adbPath(): Promise<string> {
+  const r = await resolveTool('adb');
+  if (!r.found) throw new Error('ADB not found — install Android SDK Platform-Tools');
+  return r.path;
+}
+
+// Lock Screen Recovery bridge: the page sends { serial, outputPath } but the
+// real handler (LOCKSCREEN_RECOVER) expects { systemDir }. This bridge pulls
+// /data/system/ from the device first, then runs the same recovery logic.
+ipcMain.handle(IPC_CHANNELS.LOCK_SCREEN_RECOVER, async (_e, opts: {
+  serial?: string;
+  outputPath: string;
+  systemDir?: string;
+  wordlistPath?: string;
+  maxPinDigits?: number;
+}) => {
+  const log = (m: string) => pushProgress(IPC_CHANNELS.LOCK_SCREEN_RECOVER_PROGRESS, { type: 'log', message: m });
+
+  try {
+    let systemDir = opts.systemDir || '';
+
+    // If serial provided but no systemDir, pull /data/system/ from device
+    if (!systemDir && opts.serial) {
+      systemDir = path.join(opts.outputPath, 'data_system');
+      await fs.mkdir(systemDir, { recursive: true });
+      log(`Pulling /data/system/ from device ${opts.serial}…`);
+
+      const adb = await adbPath();
+      const filesToPull = [
+        'gesture.key',
+        'password.key',
+        'gatekeeper.pattern.key',
+        'gatekeeper.password.key',
+        'locksettings.db',
+        'locksettings.db-wal',
+      ];
+      let pulledCount = 0;
+      for (const f of filesToPull) {
+        try {
+          const r = await runCommand(adb, ['-s', opts.serial, 'pull', `/data/system/${f}`, path.join(systemDir, f)], { timeout: 15000 });
+          if (r.exitCode === 0) {
+            pulledCount++;
+            log(`  ✓ Pulled ${f}`);
+          }
+        } catch {
+          // File may not exist or device may not have root
+        }
+      }
+      if (pulledCount === 0) {
+        log('⚠ Could not pull any lock files from /data/system/ — root access may be required.');
+        log('  Try providing a pre-pulled /data/system/ directory via the folder picker instead.');
+        return { success: false, error: 'No lock screen files accessible. Root required.' };
+      }
+      log(`Pulled ${pulledCount} file(s). Starting recovery analysis…`);
+    } else if (!systemDir) {
+      // Use outputPath as systemDir if it contains lock files
+      systemDir = opts.outputPath;
+    }
+
+    // Run the same recovery logic as the original LOCKSCREEN_RECOVER handler
+    const maxPinDigits = opts.maxPinDigits ?? 6;
+    const gesturePath = path.join(systemDir, 'gesture.key');
+    const passwordPath = path.join(systemDir, 'password.key');
+    const lockSettingsPath = path.join(systemDir, 'locksettings.db');
+
+    let foundAny = false;
+
+    // Pattern recovery
+    try {
+      const gesture = await fs.readFile(gesturePath);
+      log(`Found gesture.key (${gesture.length} bytes). Brute-forcing pattern…`);
+      const pattern = recoverPatternFromGestureKey(gesture);
+      if (pattern) {
+        log(`✓ PATTERN RECOVERED: ${pattern}`);
+        log(`  (cells numbered 0=top-left → 8=bottom-right, row-major)`);
+        foundAny = true;
+      } else {
+        log('  Pattern not recovered — gesture.key may be corrupt or unsupported format.');
+      }
+    } catch {
+      log('No gesture.key found (device used PIN/password, not pattern).');
+    }
+
+    // PIN/password recovery
+    try {
+      const pwKey = await fs.readFile(passwordPath);
+      log(`Found password.key (${pwKey.length} bytes).`);
+      const salt = await readSaltFromLockSettings(lockSettingsPath);
+      if (!salt) {
+        log('  Could not read salt from locksettings.db — PIN brute-force requires the salt.');
+      } else {
+        log(`  Salt: ${salt}`);
+        log(`  Brute-forcing PINs up to ${maxPinDigits} digits…`);
+        const pin = recoverPinFromPasswordKey(pwKey, salt, maxPinDigits, log);
+        if (pin) {
+          log(`✓ PIN RECOVERED: ${pin}`);
+          foundAny = true;
+        } else {
+          log('  PIN not in candidate space — try increasing max digits, or use the wordlist for password attacks.');
+        }
+      }
+    } catch {
+      log('No password.key found (device may use Android 6+ Gatekeeper).');
+    }
+
+    if (!foundAny) {
+      log('');
+      log('Nothing recovered. Possible reasons:');
+      log('  • Device runs Android 6+ with Gatekeeper (requires online attack).');
+      log('  • Lock screen was disabled at acquisition time.');
+      log('  • /data/system/ was not accessible — verify root access.');
+    }
+
+    return { success: true };
+  } catch (err) {
+    log(`ERROR: ${(err as Error).message}`);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+// EDL Read bridge: the page sends { operation, outputPath, partitionName }
+// but the real handler (EDL_IMAGE) expects { mode, outputDir, loaderPath }.
+// Map the new operation names to the old mode names.
+ipcMain.handle(IPC_CHANNELS.EDL_READ, async (_e, opts: {
+  operation: string;
+  outputPath: string;
+  partitionName?: string;
+  loaderPath?: string;
+}) => {
+  const modeMap: Record<string, string> = {
+    'read-gpt': 'printgpt',
+    'read-full': 'rs-emmc',
+    'read-partition': 'rl-userdata',
+  };
+  const mode = modeMap[opts.operation] || opts.operation;
+  const args: string[] = [];
+  if (opts.loaderPath) args.push('--loader', opts.loaderPath);
+
+  switch (mode) {
+    case 'printgpt':
+      args.push('printgpt');
+      break;
+    case 'rl-userdata': {
+      const partName = opts.partitionName || 'userdata';
+      args.push('r', partName, path.join(opts.outputPath, `${partName}.bin`));
+      break;
+    }
+    case 'rs-emmc':
+      args.push('rl', opts.outputPath);
+      break;
+    default:
+      args.push(mode);
+      break;
+  }
+
+  return runWrappedCli({
+    toolName: 'edl',
+    args,
+    progressChannel: IPC_CHANNELS.EDL_READ_PROGRESS,
+  });
+});
+
+// MTK Read bridge: the page sends { operation, outputPath, partitionName }
+// but the real handler (MTK_DUMP) expects { mode, outputDir }.
+// Map the new operation names to the old mode names.
+ipcMain.handle(IPC_CHANNELS.MTK_READ, async (_e, opts: {
+  operation: string;
+  outputPath: string;
+  partitionName?: string;
+}) => {
+  const args: string[] = [];
+
+  switch (opts.operation) {
+    case 'print-gpt':
+      args.push('printgpt');
+      break;
+    case 'read-full':
+      args.push('rf', path.join(opts.outputPath, 'full-flash.bin'));
+      break;
+    case 'read-partition': {
+      const partName = opts.partitionName || 'userdata';
+      args.push('r', partName, path.join(opts.outputPath, `${partName}.bin`));
+      break;
+    }
+    default:
+      args.push(opts.operation);
+      break;
+  }
+
+  return runWrappedCli({
+    toolName: 'mtk',
+    args,
+    progressChannel: IPC_CHANNELS.MTK_READ_PROGRESS,
+  });
 });
 
 export function registerBreachHandlers(): void {

@@ -1353,9 +1353,19 @@ function registerLiveViewHandlers(): void {
     }
   );
 
-  // Stream handler is a stub since continuous streaming needs different architecture
-  ipcMain.handle(IPC_CHANNELS.LIVE_VIEW_STREAM, async () => {
-    return { success: true, message: 'Use LIVE_VIEW_BROWSE and LIVE_VIEW_READ_LOGS for live access' };
+  // Stream handler — previously a stub. Now initializes by browsing root and
+  // returning the file listing so the Live Device View tab opens with content.
+  ipcMain.handle(IPC_CHANNELS.LIVE_VIEW_STREAM, async (_event, options?: { serial?: string }) => {
+    if (!options?.serial) {
+      return { success: false, error: 'No device selected' };
+    }
+    try {
+      const output = await adbService.shell(options.serial, "ls -la '/' 2>/dev/null");
+      const files = parseLsOutput(output, '/');
+      return { success: true, files, message: 'Live view connected' };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 }
 
@@ -1692,17 +1702,53 @@ function registerPiiPollingHandlers(): void {
           case 'device-full':
           case 'device-targeted': {
             progress(progressCh, 10, 'Scanning device for PII...');
-            // This needs a connected device - use ADB to pull relevant data and scan
             if (!python.found) throw new Error('Python required for PII scanning');
 
+            // First pull data from device if we have a serial (from targetIdentifier)
+            const serial = targetIdentifier;
+            const pullDir = path.join(outputPath, 'device_data');
+            await ensureDir(pullDir);
+
+            if (serial) {
+              progress(progressCh, 15, 'Pulling contacts, SMS, and call logs from device...');
+              const dataSources = [
+                { label: 'SMS', cmd: 'content query --uri content://sms --projection address:body:date:type' },
+                { label: 'Contacts', cmd: 'content query --uri content://contacts/phones --projection display_name:number' },
+                { label: 'Call Log', cmd: 'content query --uri content://call_log/calls --projection number:type:date:duration' },
+                { label: 'Accounts', cmd: 'dumpsys account' },
+                { label: 'WiFi Networks', cmd: 'cmd wifi list-networks 2>/dev/null' },
+                { label: 'Clipboard', cmd: 'service call clipboard 2 i32 1 i32 1 2>/dev/null' },
+              ];
+              if (source === 'device-full') {
+                dataSources.push(
+                  { label: 'Browser History', cmd: 'content query --uri content://browser/bookmarks --projection title:url 2>/dev/null' },
+                  { label: 'Settings', cmd: 'settings list secure' },
+                );
+              }
+              let pulledCount = 0;
+              for (const ds of dataSources) {
+                try {
+                  const result = await adbService.shell(serial, ds.cmd);
+                  if (result.trim()) {
+                    await fs.writeFile(path.join(pullDir, `${ds.label.toLowerCase().replace(/\s+/g, '_')}.txt`), result);
+                    pulledCount++;
+                  }
+                } catch { /* skip inaccessible */ }
+              }
+              progress(progressCh, 40, `Pulled ${pulledCount} data source(s). Scanning for PII patterns...`);
+            } else {
+              progress(progressCh, 40, 'No device serial provided. Scanning existing files in output folder...');
+            }
+
+            // Now scan pulled files for PII patterns
             const scanScript = `
 import re, json, sys, os
 
-output_path = sys.argv[1]
-patterns_str = sys.argv[2]
+scan_dir = sys.argv[1]
+output_file = sys.argv[2]
+patterns_str = sys.argv[3]
 patterns = patterns_str.split(',')
 
-# PII regex patterns
 REGEX_MAP = {
     'ssn': r'\\b\\d{3}-\\d{2}-\\d{4}\\b',
     'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\\b',
@@ -1714,20 +1760,45 @@ REGEX_MAP = {
     'passport': r'\\b[A-Z]{1,2}\\d{6,9}\\b',
 }
 
-results = {'patterns_checked': patterns, 'findings': {}}
-for p in patterns:
-    if p in REGEX_MAP:
-        results['findings'][p] = {'regex': REGEX_MAP[p], 'count': 0, 'note': 'Ready for device scan'}
+findings = []
+files_scanned = 0
+for root, dirs, files in os.walk(scan_dir):
+    for fname in files:
+        fpath = os.path.join(root, fname)
+        try:
+            with open(fpath, 'r', errors='ignore') as f:
+                content = f.read(2000000)
+            files_scanned += 1
+            for ptype in patterns:
+                if ptype in REGEX_MAP:
+                    matches = re.findall(REGEX_MAP[ptype], content)
+                    if matches:
+                        findings.append({
+                            'file': os.path.relpath(fpath, scan_dir),
+                            'type': ptype,
+                            'count': len(matches),
+                            'samples': matches[:10]
+                        })
+        except:
+            pass
 
-json.dump(results, open(os.path.join(output_path, 'pii_scan_config.json'), 'w'), indent=2)
-print(json.dumps({'configured_patterns': len(results['findings'])}))
+result = {
+    'scan_dir': scan_dir,
+    'files_scanned': files_scanned,
+    'findings': findings,
+    'total_pii_items': sum(f['count'] for f in findings),
+    'patterns_checked': patterns
+}
+json.dump(result, open(output_file, 'w'), indent=2)
+print(json.dumps({'files_scanned': files_scanned, 'pii_findings': len(findings), 'total_items': result['total_pii_items']}))
 `;
             const scriptPath = path.join(outputPath, '_pii_scan.py');
+            const resultPath = path.join(outputPath, 'pii_scan_results.json');
             await fs.writeFile(scriptPath, scanScript, 'utf-8');
-            const result = await runCommand(python.path, [scriptPath, outputPath, patterns.join(',')], { timeout: 30000 });
+            const result = await runCommand(python.path, [scriptPath, pullDir, resultPath, patterns.join(',')], { timeout: 60000 });
             await fs.unlink(scriptPath).catch(() => {});
-            progress(progressCh, 100, 'PII scan configuration complete');
-            return { success: true, outputPath, summary: result.stdout.trim() };
+            progress(progressCh, 100, 'PII scan complete');
+            return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
           }
 
           case 'web-osint': {
