@@ -51,7 +51,6 @@ import {
   ChevronDown,
   ChevronRight,
   Shield,
-  Phone,
   PhoneCall,
   ImagePlus,
   FolderTree,
@@ -70,9 +69,6 @@ import {
   Users,
   Terminal,
   Download,
-  Cpu,
-  MemoryStick,
-  ShieldOff,
 } from 'lucide-react';
 import { APP_VERSION } from '@rmpg/shared';
 
@@ -165,16 +161,6 @@ const navSections: NavSection[] = [
       { label: 'Image Finder', path: '/analysis/image-finder', icon: <ScanSearch size={16} />, badge: 'BETA' },
       { label: 'MVT Scanner', path: '/analysis/mvt-scanner', icon: <ShieldAlert size={16} /> },
       { label: 'Decryption', path: '/analysis/decryption', icon: <KeyRound size={16} /> },
-    ],
-  },
-  {
-    title: 'Breach & Bypass',
-    items: [
-      { label: 'Lock Screen Recovery', path: '/breach/lockscreen', icon: <ShieldOff size={16} /> },
-      { label: 'EDL Imager (Qualcomm)', path: '/breach/edl', icon: <Cpu size={16} /> },
-      { label: 'MTK Imager (MediaTek)', path: '/breach/mtk', icon: <MemoryStick size={16} /> },
-      { label: 'iOS Backup Decrypt', path: '/breach/ios-backup-decrypt', icon: <KeyRound size={16} /> },
-      { label: 'Samsung Unlock', path: '/tools/samsung-unlock', icon: <Unlock size={16} /> },
     ],
   },
   {
