@@ -73,6 +73,10 @@ import {
   Cpu,
   MemoryStick,
   ShieldOff,
+  Mail,
+  Share2,
+  FileSearch,
+  Car,
 } from 'lucide-react';
 import { APP_VERSION } from '@rmpg/shared';
 
@@ -203,6 +207,31 @@ const navSections: NavSection[] = [
     items: [
       { label: 'People Search', path: '/intel/people-search', icon: <Users size={16} /> },
       { label: 'Python Security Toolkit', path: '/intel/python-toolkit', icon: <Terminal size={16} /> },
+    ],
+  },
+  {
+    title: 'PI & Spy Integrations',
+    items: [
+      { label: 'Sherlock OSINT', path: '/pi/sherlock', icon: <Search size={16} />, badge: 'NEW' },
+      { label: 'SpiderFoot Scanner', path: '/pi/spiderfoot', icon: <Globe size={16} />, badge: 'NEW' },
+      { label: 'theHarvester', path: '/pi/harvester', icon: <Mail size={16} />, badge: 'NEW' },
+      { label: 'PhoneInfoga', path: '/pi/phoneinfoga', icon: <Phone size={16} />, badge: 'NEW' },
+      { label: 'GHunt Recon', path: '/pi/ghunt', icon: <Eye size={16} />, badge: 'NEW' },
+      { label: 'Maigret Profiler', path: '/pi/maigret', icon: <UserSearch size={16} />, badge: 'NEW' },
+      { label: 'Holehe Checker', path: '/pi/holehe', icon: <Mail size={16} />, badge: 'NEW' },
+      { label: 'Social Analyzer', path: '/pi/social-analyzer', icon: <Users size={16} />, badge: 'NEW' },
+      { label: 'Photon Crawler', path: '/pi/photon', icon: <Globe size={16} />, badge: 'NEW' },
+      { label: 'Skiptracer', path: '/pi/skiptracer', icon: <Target size={16} />, badge: 'NEW' },
+      { label: 'Recon-ng Framework', path: '/pi/recon-ng', icon: <Terminal size={16} />, badge: 'NEW' },
+      { label: 'Maltego CE', path: '/pi/maltego', icon: <Share2 size={16} />, badge: 'NEW' },
+      { label: 'Metagoofil', path: '/pi/metagoofil', icon: <FileSearch size={16} />, badge: 'NEW' },
+      { label: 'Creepy Geolocator', path: '/pi/creepy', icon: <MapPin size={16} />, badge: 'NEW' },
+      { label: 'TinEye Reverse', path: '/pi/tineye', icon: <ScanSearch size={16} />, badge: 'NEW' },
+      { label: 'License Plate Reader', path: '/pi/plate-reader', icon: <Car size={16} />, badge: 'NEW' },
+      { label: 'Counter Surveillance', path: '/pi/counter-surv', icon: <ShieldAlert size={16} />, badge: 'NEW' },
+      { label: 'Vehicle Tracker', path: '/pi/vehicle-tracker', icon: <Navigation size={16} />, badge: 'NEW' },
+      { label: 'Stakeout Camera', path: '/pi/stakeout', icon: <Camera size={16} />, badge: 'NEW' },
+      { label: 'Dead Drop Comms', path: '/pi/dead-drop', icon: <Shield size={16} />, badge: 'NEW' },
     ],
   },
   {
