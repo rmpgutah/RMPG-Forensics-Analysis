@@ -30,7 +30,7 @@ export function registerAudioTranscriptionHandlers(): void {
       }
     ) => {
       const { inputPaths, outputDir, language = 'pt', model = 'base' } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

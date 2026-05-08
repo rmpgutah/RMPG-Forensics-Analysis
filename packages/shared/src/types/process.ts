@@ -9,6 +9,16 @@ export interface ProcessProgress {
   type: 'stdout' | 'stderr' | 'status';
   data: string;
   timestamp: number;
+  // Rich optional fields — handlers fill these when available
+  percent?: number;
+  message?: string;
+  bytes?: number;       // bytes transferred so far
+  totalBytes?: number;  // total bytes expected
+  speed?: number;       // bytes/sec
+  eta?: number;         // seconds remaining
+  phase?: string;
+  filesCount?: number;
+  totalFiles?: number;
 }
 
 export interface ProcessOptions {
@@ -38,4 +48,11 @@ export type ToolName =
   | 'ideviceinstaller'
   | 'scrcpy'
   | 'instaloader'
-  | 'odin';
+  | 'odin'
+  | 'jadx'
+  | 'idevicescreenshot'
+  | 'idevicediagnostics'
+  // Breach & Bypass tools
+  | 'edl'        // bkerler/edl — Qualcomm Emergency Download Mode imager
+  | 'mtk'        // bkerler/mtkclient — MediaTek BROM exploit
+  | 'iphone_backup_decrypt'; // pip iphone_backup_decrypt — iOS encrypted backup decrypt + keychain

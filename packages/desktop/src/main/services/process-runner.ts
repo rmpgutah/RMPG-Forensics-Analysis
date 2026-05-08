@@ -26,6 +26,12 @@ export function runCommand(
       // so that .cmd/.bat wrappers (e.g. adb.cmd) are resolved correctly.
       shell: options?.shell ?? (isWindows() && !binary.includes('\\') && !binary.includes('/')),
       windowsHide: true,
+      // Explicit stdio: ignore stdin (we never write to children), pipe
+      // stdout/stderr so we can capture them. Without `'ignore'` for
+      // stdin, Node tries to attach the parent's stdin FD — which in a
+      // Finder-launched packaged Electron app is invalid, producing the
+      // mysterious "spawn EBADF" error that took down ADB across the app.
+      stdio: ['ignore', 'pipe', 'pipe'],
     };
 
     let child: ChildProcess;
@@ -162,8 +168,9 @@ export function runCommandWithProgress(
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutChunks.push(chunk);
       const text = chunk.toString('utf-8');
-      // Emit each line as a separate progress event
-      const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
+      // Split by \r\n, \n, or bare \r — tools like idevicebackup2 use \r for
+      // in-place progress updates, which would otherwise arrive as one huge chunk.
+      const lines = text.split(/\r\n|\n|\r/).filter((l) => l.length > 0);
       for (const line of lines) {
         onProgress({ type: 'stdout', data: line, timestamp: Date.now() });
       }
@@ -172,7 +179,7 @@ export function runCommandWithProgress(
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrChunks.push(chunk);
       const text = chunk.toString('utf-8');
-      const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
+      const lines = text.split(/\r\n|\n|\r/).filter((l) => l.length > 0);
       for (const line of lines) {
         onProgress({ type: 'stderr', data: line, timestamp: Date.now() });
       }

@@ -21,7 +21,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar } from '../components/common';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -178,15 +178,6 @@ export const IosFileExtraction: React.FC = () => {
     deleted: 0,
   });
 
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, {
-        title: 'Select iOS Backup Folder',
-      });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
-
   const handleBrowseOutput = async () => {
     try {
       const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, {
@@ -284,7 +275,10 @@ export const IosFileExtraction: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_FILE_EXTRACT_PROGRESS, (_event: unknown, data: ExtractionProgress) => {
+    // preload `api.on` callback gets `(...args)` — no event arg. The old
+    // `(_event, data)` capture made `data` undefined → progress stuck.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_FILE_EXTRACT_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? { percent: 0 }) as ExtractionProgress;
       setProgress(data);
       if (data.percent >= 100) setExtracting(false);
     });
@@ -310,50 +304,34 @@ export const IosFileExtraction: React.FC = () => {
       />
 
       {/* Backup Source + Output */}
-      <div className="card" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                iOS Backup Source
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={backupPath}
-                  readOnly
-                  placeholder="Select iOS backup folder..."
-                  className="input-field flex-1"
-                  style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-                />
-                <button onClick={handleBrowseBackup} className="btn-secondary" disabled={extracting}>
-                  Browse
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Output Folder
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={outputPath}
-                  readOnly
-                  placeholder="Select extraction output folder..."
-                  className="input-field flex-1"
-                  style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
-                />
-                <button onClick={handleBrowseOutput} className="btn-secondary" disabled={extracting}>
-                  Browse
-                </button>
-              </div>
+      <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading || extracting}
+          />
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Output Folder
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={outputPath}
+                readOnly
+                placeholder="Select extraction output folder..."
+                className="input-field flex-1"
+                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+              />
+              <button onClick={handleBrowseOutput} className="btn-secondary" disabled={extracting}>
+                Browse
+              </button>
             </div>
           </div>
-
-          <div className="flex gap-2">
+          <div className="flex justify-end">
             <button onClick={handleLoadTree} className="btn-primary" disabled={!backupPath || loading || extracting}>
-              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <FolderTree size={16} className="mr-2" />}
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
               {loading ? 'Loading...' : 'Load File Tree'}
             </button>
           </div>

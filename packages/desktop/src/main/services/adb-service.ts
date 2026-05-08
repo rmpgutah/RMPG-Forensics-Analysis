@@ -57,8 +57,44 @@ async function adbStrict(args: string[], options?: ProcessOptions): Promise<Proc
  *
  * Parses the output of `adb devices -l` to extract serial, model, product, etc.
  */
+let listDevicesInFlight: Promise<AndroidDevice[]> | null = null;
+
+const SMARTSOCKET_RACE = /smartsocket.*Address already in use|ADB server didn't ACK|cannot connect to daemon/i;
+
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function listDevices(): Promise<AndroidDevice[]> {
-  const result = await adbStrict(['devices', '-l']);
+  if (listDevicesInFlight) return listDevicesInFlight;
+  listDevicesInFlight = (async () => {
+    try {
+      return await listDevicesImpl();
+    } finally {
+      listDevicesInFlight = null;
+    }
+  })();
+  return listDevicesInFlight;
+}
+
+async function listDevicesImpl(): Promise<AndroidDevice[]> {
+  let result;
+  try {
+    result = await adbStrict(['devices', '-l']);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!SMARTSOCKET_RACE.test(msg)) throw err;
+    await sleep(250);
+    try {
+      result = await adbStrict(['devices', '-l']);
+    } catch (err2) {
+      const msg2 = err2 instanceof Error ? err2.message : String(err2);
+      if (!SMARTSOCKET_RACE.test(msg2)) throw err2;
+      try { await adb(['kill-server']); } catch { /* ignore */ }
+      await sleep(500);
+      result = await adbStrict(['devices', '-l']);
+    }
+  }
   const lines = result.stdout.trim().split(/\r?\n/).slice(1); // Skip header
   const devices: AndroidDevice[] = [];
 

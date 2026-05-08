@@ -14,7 +14,7 @@ export function registerDialogHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.DIALOG_OPEN_FOLDER,
     async (_event, options?: { title?: string; defaultPath?: string }) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
       const result = await dialog.showOpenDialog(win!, {
         title: options?.title ?? 'Select Folder',
         defaultPath: options?.defaultPath,
@@ -42,7 +42,7 @@ export function registerDialogHandlers(): void {
         multiple?: boolean;
       }
     ) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
       const properties: Electron.OpenDialogOptions['properties'] = ['openFile'];
       if (options?.multiple) {
         properties.push('multiSelections');
@@ -75,7 +75,7 @@ export function registerDialogHandlers(): void {
         filters?: Electron.FileFilter[];
       }
     ) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
       const result = await dialog.showSaveDialog(win!, {
         title: options?.title ?? 'Save File',
         defaultPath: options?.defaultPath,

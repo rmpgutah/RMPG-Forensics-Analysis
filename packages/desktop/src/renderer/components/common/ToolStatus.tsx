@@ -5,9 +5,22 @@ import { IPC_CHANNELS } from '@rmpg/shared';
 interface ToolStatusProps {
   toolName: string;
   label?: string;
+  description?: string;
 }
 
-export const ToolStatus: React.FC<ToolStatusProps> = ({ toolName, label }) => {
+/**
+ * Tool version strings come in many shapes: "Android Debug Bridge version
+ * 1.0.41", "tesseract 5.5.2", "openjdk version "21.0.1" 2024-10-15", or just
+ * "3.12.4". Extract the first dotted-numeric token and prefix exactly one
+ * "v" — never prepend "v" to whatever the binary printed (which can include
+ * runtime errors when the tool is a broken stub).
+ */
+function formatVersion(raw: string): string {
+  const match = raw.match(/(\d+\.[\d.]+)/);
+  return match ? `v${match[1]}` : raw;
+}
+
+export const ToolStatus: React.FC<ToolStatusProps> = ({ toolName, label, description }) => {
   const [status, setStatus] = useState<'checking' | 'found' | 'missing'>('checking');
   const [version, setVersion] = useState<string>('');
 
@@ -27,20 +40,36 @@ export const ToolStatus: React.FC<ToolStatusProps> = ({ toolName, label }) => {
     check();
   }, [toolName]);
 
+  const isMissing = status === 'missing';
+
   return (
-    <div className="flex items-center gap-2 text-sm">
-      {status === 'checking' && (
-        <Loader2 size={14} className="animate-spin text-slate-500" />
-      )}
-      {status === 'found' && <CheckCircle size={14} className="text-green-400" />}
-      {status === 'missing' && <XCircle size={14} className="text-red-400" />}
-      <span className={status === 'missing' ? 'text-red-400' : 'text-slate-300'}>
-        {label || toolName}
-        {version && <span className="ml-1 text-xs text-slate-500">v{version}</span>}
-      </span>
-      {status === 'missing' && (
-        <span className="text-xs text-red-400/70">(not found)</span>
-      )}
+    <div
+      className="flex items-start gap-2 rounded p-2 text-sm"
+      style={{
+        background: isMissing ? 'rgba(239,68,68,0.06)' : 'var(--bg-secondary)',
+        border: `1px solid ${isMissing ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}`,
+      }}
+      title={description}
+    >
+      <div className="mt-0.5 shrink-0">
+        {status === 'checking' && <Loader2 size={14} className="animate-spin text-slate-500" />}
+        {status === 'found'    && <CheckCircle size={14} className="text-green-400" />}
+        {status === 'missing'  && <XCircle size={14} className="text-red-400" />}
+      </div>
+      <div className="min-w-0">
+        <div
+          className="font-medium truncate"
+          style={{ color: isMissing ? 'var(--text-secondary)' : 'var(--text-primary)' }}
+        >
+          {label || toolName}
+        </div>
+        {status === 'found' && version && (
+          <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{formatVersion(version)}</div>
+        )}
+        {isMissing && (
+          <div className="text-[11px] text-red-400">Not found in PATH</div>
+        )}
+      </div>
     </div>
   );
 };

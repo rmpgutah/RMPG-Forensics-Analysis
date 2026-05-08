@@ -135,7 +135,7 @@ export const SqliteBrowser: React.FC = () => {
             .join(',')
         );
         const csv = [header, ...rows].join('\n');
-        await ipc.invoke('fs:write-file', savePath, csv);
+        await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, csv);
         addLog(`Exported ${queryResult.rows.length} rows to: ${savePath}`);
       }
     } catch (err) {
@@ -350,7 +350,7 @@ export const SqliteBrowser: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-color)]">
                     {queryResult.rows.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-[var(--bg-hover)]">
+                      <tr key={`sqlite-row-${idx}`} className="hover:bg-[var(--bg-hover)]">
                         <td className="px-3 py-1.5 text-[var(--text-muted)] font-mono">{idx + 1}</td>
                         {queryResult.columns.map((col) => (
                           <td

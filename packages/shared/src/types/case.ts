@@ -7,6 +7,7 @@ export interface ForensicCase {
   examinerName: string;
   caseNumber: string;
   description: string;
+  notes?: string;
   device?: DeviceSummary;
   acquisitions: Acquisition[];
   syncStatus: SyncStatus;

@@ -32,6 +32,7 @@ export const AudioTranscription: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Input Folder (Opus Files)"
             value={inputFolder}
             onChange={setInputFolder}
@@ -39,6 +40,7 @@ export const AudioTranscription: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output Folder (Reports)"
             value={outputFolder}
             onChange={setOutputFolder}
@@ -59,6 +61,12 @@ export const AudioTranscription: React.FC = () => {
           {(process.isRunning || process.progress.percent > 0) && (
             <ProgressIndicator
               percent={process.progress.percent}
+              bytes={process.progress.bytes}
+              totalBytes={process.progress.totalBytes}
+              speed={process.progress.speed}
+              eta={process.progress.eta}
+              filesCount={process.progress.filesCount}
+              totalFiles={process.progress.totalFiles}
               message={process.progress.message}
               isRunning={process.isRunning}
             />

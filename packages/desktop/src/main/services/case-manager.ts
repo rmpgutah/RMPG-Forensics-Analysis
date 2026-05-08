@@ -85,6 +85,11 @@ export async function createCase(config: {
 
 /**
  * Open an existing case from its folder path by reading the manifest.
+ *
+ * If the folder doesn't have a `case.json` we try to give the user an
+ * actionable hint instead of leaking the raw ENOENT — the most common
+ * mistake is pointing this at an iOS backup directory or its parent, both
+ * of which look folder-y but are not RMPG cases.
  */
 export async function openCase(casePath: string): Promise<ForensicCase> {
   const manifestPath = path.join(casePath, CASE_MANIFEST);
@@ -95,11 +100,63 @@ export async function openCase(casePath: string): Promise<ForensicCase> {
     data.localPath = casePath;
     return data;
   } catch (err) {
+    const hint = await detectFolderType(casePath);
+    if (hint) throw new Error(hint);
     throw new Error(
       `Failed to open case at "${casePath}": ${(err as Error).message}. ` +
         `Make sure the folder contains a valid ${CASE_MANIFEST} file.`
     );
   }
+}
+
+/**
+ * Inspect a folder the user tried to open as a case and, when possible,
+ * return a human-readable explanation of what they actually pointed us at.
+ * Returns undefined if the folder is just a generic empty/unknown directory.
+ *
+ * Recognised patterns:
+ * - iOS backup root (contains Manifest.db / Info.plist / Status.plist)
+ * - Parent of an iOS backup (contains a UDID-named subfolder with Manifest.db)
+ * - Folder that doesn't exist or isn't a directory
+ */
+async function detectFolderType(folderPath: string): Promise<string | undefined> {
+  let stat;
+  try {
+    stat = await fs.stat(folderPath);
+  } catch {
+    return `The path "${folderPath}" doesn't exist or isn't accessible.`;
+  }
+  if (!stat.isDirectory()) {
+    return `"${folderPath}" is a file, not a folder. Pick a case folder instead.`;
+  }
+
+  // iOS backup root: Manifest.db sits directly inside
+  try {
+    await fs.access(path.join(folderPath, 'Manifest.db'));
+    return (
+      `"${folderPath}" looks like an iOS backup folder, not a case folder. ` +
+      `Open it from the iOS Backup tools instead, or create a New Case and select this folder as the acquisition source.`
+    );
+  } catch { /* not an iOS backup root */ }
+
+  // Parent of iOS backup: contains UDID-shaped subfolders with Manifest.db
+  try {
+    const entries = await fs.readdir(folderPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      // iOS UDIDs: 25- or 40-char hex (with or without dashes)
+      if (!/^[0-9a-fA-F-]{25,40}$/.test(entry.name)) continue;
+      try {
+        await fs.access(path.join(folderPath, entry.name, 'Manifest.db'));
+        return (
+          `"${folderPath}" contains an iOS backup ("${entry.name}") but isn't itself a case. ` +
+          `Either open the backup subfolder via the iOS Backup tools, or create a New Case here.`
+        );
+      } catch { /* keep scanning */ }
+    }
+  } catch { /* unreadable, fall through */ }
+
+  return undefined;
 }
 
 /**
@@ -288,6 +345,16 @@ export async function importCase(zipPath: string, outputDir: string): Promise<Fo
   await writeManifest(casePath, forensicCase);
 
   return forensicCase;
+}
+
+/**
+ * Save free-text notes to an existing case manifest.
+ */
+export async function saveNotes(casePath: string, notes: string): Promise<void> {
+  const forensicCase = await openCase(casePath);
+  forensicCase.notes = notes;
+  forensicCase.updatedAt = isoNow();
+  await writeManifest(casePath, forensicCase);
 }
 
 /**

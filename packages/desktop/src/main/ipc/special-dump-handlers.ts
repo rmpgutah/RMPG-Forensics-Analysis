@@ -18,7 +18,12 @@ export function registerSpecialDumpHandlers(): void {
   // ---------------------------------------------------------------------------
   ipcMain.handle(
     IPC_CHANNELS.DUMP_LIST_SERVICES,
-    async (_event, serial: string) => {
+    // SpecialDump page sends `{serial}` (object); legacy callers pass the
+    // serial as a bare string. Accept both — `dumpsys -l` against an
+    // object literal silently produced no output.
+    async (_event, arg: string | { serial: string }) => {
+      const serial = typeof arg === 'string' ? arg : arg?.serial;
+      if (!serial) throw new Error('No device selected.');
       const output = await adbService.shell(serial, 'dumpsys -l');
       return output
         .trim()
@@ -35,14 +40,19 @@ export function registerSpecialDumpHandlers(): void {
     IPC_CHANNELS.DUMP_EXTRACT,
     async (
       _event,
+      // Renderer sends `outputPath`; original contract used `outputDir`.
       options: {
         serial: string;
         services: string[];
-        outputDir: string;
+        outputDir?: string;
+        outputPath?: string;
       }
     ) => {
-      const { serial, services, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const { serial, services } = options;
+      const outputDir = options.outputDir ?? options.outputPath;
+      if (!outputDir) throw new Error('No output folder selected.');
+      if (!serial) throw new Error('No device selected.');
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

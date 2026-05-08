@@ -106,7 +106,7 @@ export const ExifViewer: React.FC = () => {
             null,
             2
           );
-          await ipc.invoke('fs:write-file', savePath, json);
+          await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, json);
         } else {
           const allKeys = new Set<string>();
           results.forEach((r) => Object.keys(r.fields).forEach((k) => allKeys.add(k)));
@@ -116,7 +116,7 @@ export const ExifViewer: React.FC = () => {
             (r) =>
               `"${r.filename}","${r.path}",${keys.map((k) => `"${r.fields[k] ?? ''}"`).join(',')}`
           );
-          await ipc.invoke('fs:write-file', savePath, [header, ...rows].join('\n'));
+          await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, [header, ...rows].join('\n'));
         }
         addLog(`Exported ${results.length} file(s) to: ${savePath}`);
       }
@@ -217,6 +217,7 @@ export const ExifViewer: React.FC = () => {
               />
             ) : (
               <FolderPicker
+            role="source"
                 label="Image Directory"
                 value={dirPath}
                 onChange={setDirPath}

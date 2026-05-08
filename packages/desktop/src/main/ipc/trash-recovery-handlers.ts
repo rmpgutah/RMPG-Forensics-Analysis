@@ -19,7 +19,7 @@ export function registerTrashRecoveryHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TRASH_SCAN,
     async (_event, serial: string) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -34,15 +34,30 @@ export function registerTrashRecoveryHandlers(): void {
 
       sendProgress('Scanning device for deleted/trash files...');
 
-      // Search multiple known trash/recycle locations
+      // Search multiple known trash/recycle locations. The set covers
+      // stock-Android conventions (.Trash, .Trashes), Samsung/MIUI
+      // recycle bins (.recycle, .Recycle), Android 11+ MediaStore
+      // trashed-items convention (`.trashed-*` files anywhere in
+      // /sdcard), Google Photos local trash, WhatsApp chat backups
+      // pending recovery, and per-app cache dirs whose names tend to
+      // hold deleted artefacts. Empty paths fail silently in the
+      // per-path try/catch below.
       const searchPaths = [
         '/sdcard/.Trash',
         '/sdcard/.trash',
         '/sdcard/.Trashes',
-        '/sdcard/DCIM/.thumbnails',
-        '/sdcard/Android/data/.trash',
+        '/sdcard/.RecycleBin',
         '/sdcard/.recycle',
         '/sdcard/.Recycle',
+        '/sdcard/DCIM/.trashed',
+        '/sdcard/DCIM/.thumbnails',
+        '/sdcard/Pictures/.trashed',
+        '/sdcard/Android/data/.trash',
+        '/sdcard/Android/data/com.google.android.apps.photos/cache',
+        '/sdcard/Android/data/com.whatsapp/cache',
+        '/sdcard/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
+        '/sdcard/MIUI/Gallery/cloud/.trashBin',
+        '/sdcard/Pictures/.thumbnails',
       ];
 
       const foundFiles: Array<{
@@ -53,19 +68,28 @@ export function registerTrashRecoveryHandlers(): void {
 
       for (const searchPath of searchPaths) {
         try {
+          // `find -ls` prints a long listing per file in one round-trip:
+          //   inode blocks perms links user group SIZE date time year PATH
+          // Field 7 is the size in bytes; everything from field 11 onwards
+          // is the path (and may legitimately contain spaces). toybox /
+          // busybox / GNU all support `-ls`; on the rare device that doesn't
+          // we'll see fewer than 11 fields and treat the line as a plain
+          // path with empty size.
           const output = await adbService.shell(
             serial,
-            `find ${searchPath} -type f 2>/dev/null`
+            `find ${searchPath} -type f -ls 2>/dev/null`
           );
-          const files = output
-            .trim()
-            .split(/\r?\n/)
-            .filter((line) => line.trim().length > 0);
-
-          for (const file of files) {
+          for (const rawLine of output.split(/\r?\n/)) {
+            const line = rawLine.trim();
+            if (!line) continue;
+            const parts = line.split(/\s+/);
+            if (parts.length < 11) {
+              foundFiles.push({ remotePath: line, size: '', source: searchPath });
+              continue;
+            }
             foundFiles.push({
-              remotePath: file.trim(),
-              size: '',
+              remotePath: parts.slice(10).join(' '),
+              size: parts[6] ?? '',
               source: searchPath,
             });
           }
@@ -78,22 +102,23 @@ export function registerTrashRecoveryHandlers(): void {
       try {
         const output = await adbService.shell(
           serial,
-          'find /sdcard/ -name "*.trashed*" -o -name ".trash*" -type f 2>/dev/null | head -500'
+          'find /sdcard/ \\( -name "*.trashed*" -o -name ".trash*" \\) -type f -ls 2>/dev/null | head -500'
         );
-        const files = output
-          .trim()
-          .split(/\r?\n/)
-          .filter((line) => line.trim().length > 0);
-
-        for (const file of files) {
-          const trimmed = file.trim();
-          // Avoid duplicates
-          if (!foundFiles.some((f) => f.remotePath === trimmed)) {
-            foundFiles.push({
-              remotePath: trimmed,
-              size: '',
-              source: 'broad search',
-            });
+        for (const rawLine of output.split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          const parts = line.split(/\s+/);
+          let remotePath: string;
+          let size: string;
+          if (parts.length < 11) {
+            remotePath = line;
+            size = '';
+          } else {
+            remotePath = parts.slice(10).join(' ');
+            size = parts[6] ?? '';
+          }
+          if (!foundFiles.some((f) => f.remotePath === remotePath)) {
+            foundFiles.push({ remotePath, size, source: 'broad search' });
           }
         }
       } catch {
@@ -120,7 +145,7 @@ export function registerTrashRecoveryHandlers(): void {
       }
     ) => {
       const { serial, files, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

@@ -97,10 +97,18 @@ export const DeviceMirror: React.FC = () => {
 
   const statusColors: Record<MirrorStatus, string> = {
     idle: 'bg-[var(--bg-hover)] text-[var(--text-secondary)]',
-    starting: 'bg-yellow-100 text-yellow-700',
-    running: 'bg-green-100 text-green-700',
-    stopping: 'bg-yellow-100 text-yellow-700',
-    error: 'bg-red-100 text-red-700',
+    starting: 'text-yellow-400',
+    running: 'text-green-400',
+    stopping: 'text-yellow-400',
+    error: 'text-red-400',
+  };
+
+  const statusBgStyles: Record<MirrorStatus, React.CSSProperties> = {
+    idle: {},
+    starting: { background: 'rgba(234,179,8,0.12)' },
+    running: { background: 'rgba(34,197,94,0.12)' },
+    stopping: { background: 'rgba(234,179,8,0.12)' },
+    error: { background: 'rgba(239,68,68,0.12)' },
   };
 
   const statusLabels: Record<MirrorStatus, string> = {
@@ -136,14 +144,14 @@ export const DeviceMirror: React.FC = () => {
 
           <div className="card">
             <h3 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Mirror Status</h3>
-            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${statusColors[status]}`}>
+            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${statusColors[status]}`} style={statusBgStyles[status]}>
               {status === 'running' && <Wifi size={12} className="animate-pulse" />}
               {isBusy && <Loader2 size={12} className="animate-spin" />}
               {statusLabels[status]}
             </div>
 
             {error && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className="mt-3 rounded-lg border border-red-500/40 p-3 text-xs text-red-400" style={{ background: 'rgba(239,68,68,0.1)' }}>
                 {error}
               </div>
             )}

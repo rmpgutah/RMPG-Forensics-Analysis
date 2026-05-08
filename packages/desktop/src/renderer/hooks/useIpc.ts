@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 interface UseIpcReturn {
-  invoke: <T = unknown>(channel: string, ...args: unknown[]) => Promise<T | null>;
+  invoke: <T = unknown>(channel: string, ...args: unknown[]) => Promise<T>;
   loading: boolean;
   error: string | null;
   reset: () => void;
@@ -16,7 +16,7 @@ export function useIpc(): UseIpcReturn {
   const [error, setError] = useState<string | null>(null);
 
   const invoke = useCallback(
-    async <T = unknown>(channel: string, ...args: unknown[]): Promise<T | null> => {
+    async <T = unknown>(channel: string, ...args: unknown[]): Promise<T> => {
       setLoading(true);
       setError(null);
       try {
@@ -27,7 +27,7 @@ export function useIpc(): UseIpcReturn {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setLoading(false);
-        return null;
+        throw err;
       }
     },
     []

@@ -208,6 +208,7 @@ export const WhatsAppMerge: React.FC = () => {
 
           <div className="card space-y-4">
             <FolderPicker
+            role="output"
               label="Output Directory"
               value={outputPath}
               onChange={setOutputPath}

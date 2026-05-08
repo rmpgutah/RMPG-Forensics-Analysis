@@ -3,6 +3,8 @@ import { IPC_CHANNELS } from '@rmpg/shared';
 import type { ProcessProgress } from '@rmpg/shared';
 import * as adbService from '../services/adb-service';
 import type { AdbBackupOptions } from '../services/adb-service';
+import * as iosService from '../services/ios-service';
+import { reportError } from '../services/error-reporter';
 
 /**
  * Register ADB operation IPC handlers.
@@ -15,36 +17,52 @@ export function registerAdbHandlers(): void {
   // ADB_LIST_DEVICES - Enumerate connected Android + iOS devices
   // ---------------------------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.ADB_LIST_DEVICES, async () => {
-    const android = await adbService.listDevices();
-
-    // Also detect iOS devices via libimobiledevice
-    const ios: { serial: string; model: string; manufacturer: string; product: string; version: string }[] = [];
+    // Android: wrap separately so an ADB failure (binary missing, permissions,
+    // etc.) does NOT take iOS detection down with it. Surface the error via
+    // reportError so the user sees a banner instead of a silent empty list.
+    let android: Awaited<ReturnType<typeof adbService.listDevices>> = [];
     try {
-      const { execFile } = require('child_process');
-      const { promisify } = require('util');
-      const execFileAsync = promisify(execFile);
+      android = await adbService.listDevices();
+    } catch (err) {
+      await reportError({
+        severity: 'error',
+        source: 'adb-handlers.ADB_LIST_DEVICES',
+        message: err instanceof Error ? err.message : String(err),
+        detail: err instanceof Error ? err.stack : undefined,
+        retryable: true,
+      });
+    }
 
-      const { stdout } = await execFileAsync('idevice_id', ['-l'], { timeout: 5000 });
-      const udids = stdout.trim().split(/\r?\n/).filter((s: string) => s.trim());
-
-      for (const udid of udids) {
-        try {
-          const { stdout: info } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'ProductType'], { timeout: 5000 });
-          const { stdout: nameOut } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'DeviceName'], { timeout: 5000 });
-          const { stdout: versionOut } = await execFileAsync('ideviceinfo', ['-u', udid, '-k', 'ProductVersion'], { timeout: 5000 });
-          ios.push({
-            serial: udid.trim(),
-            model: nameOut.trim() || info.trim(),
-            manufacturer: 'Apple',
-            product: info.trim(),
-            version: versionOut.trim(),
-          });
-        } catch {
-          ios.push({ serial: udid.trim(), model: 'iPhone', manufacturer: 'Apple', product: '', version: '' });
-        }
+    // iOS: already wrapped (libimobiledevice may be missing).
+    let ios: { serial: string; model: string; manufacturer: string; product: string; version: string }[] = [];
+    try {
+      const iosDevices = await iosService.listDevices();
+      ios = iosDevices.map((d) => ({
+        serial: d.udid,
+        model: d.name || d.productType || 'iPhone',
+        manufacturer: 'Apple',
+        product: d.productType || '',
+        version: d.productVersion || '',
+      }));
+    } catch (err) {
+      // iOS detection silent for the benign "not installed" case (typical
+      // on machines that don't have libimobiledevice). Other failures
+      // surface as a non-blocking warning toast.
+      const msg = err instanceof Error ? err.message : String(err);
+      // Benign = libimobiledevice not installed (the only case worth silencing).
+      // Match the specific sentinel from getToolPath in ios-service rather than
+      // any "not found" substring, which would swallow real device errors like
+      // "device not found" or "lockdownd: key not found".
+      const isBenignToolMissing = /^(idevice_id|ideviceinfo|idevicebackup2)\s+not\s+found\b/i.test(msg)
+        || /^ENOENT\b/i.test(msg)
+        || /^Error:\s*spawn .* ENOENT$/i.test(msg);
+      if (!isBenignToolMissing) {
+        await reportError({
+          severity: 'warning',
+          source: 'adb-handlers.ADB_LIST_DEVICES.ios',
+          message: msg,
+        });
       }
-    } catch {
-      // libimobiledevice not installed or no iOS devices
     }
 
     return { android, ios };
@@ -61,7 +79,7 @@ export function registerAdbHandlers(): void {
       outputPath: string,
       options?: AdbBackupOptions
     ) => {
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const onProgress = (p: ProcessProgress): void => {
         if (win && !win.isDestroyed()) {

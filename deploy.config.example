@@ -1,0 +1,26 @@
+# RMPG Forensics — Deploy Configuration
+# Copy this file to deploy.config and fill in your server details.
+# deploy.config is gitignored — never commit credentials.
+
+# ── SSH / rsync upload ────────────────────────────────────────────────────────
+# Your web server SSH user and hostname (leave blank to use FTP instead)
+DEPLOY_SSH_USER=
+DEPLOY_SSH_HOST=rmpgutah.us
+
+# Absolute path on the server where update files should land
+DEPLOY_REMOTE_PATH=/public_html/downloads/updates
+
+# Optional: path to SSH private key (leave blank to use SSH agent / default key)
+DEPLOY_SSH_KEY=
+
+# ── FTP fallback (used if DEPLOY_SSH_USER is blank) ──────────────────────────
+DEPLOY_FTP_HOST=rmpgutah.us
+DEPLOY_FTP_USER=
+DEPLOY_FTP_PASS=
+DEPLOY_FTP_PATH=/public_html/downloads/updates
+
+# ── GitHub Releases (alternative — leave blank to skip) ──────────────────────
+# Set this to auto-create a GitHub release and attach installers.
+# Requires `gh` CLI authenticated: gh auth login
+DEPLOY_GITHUB_REPO=
+# e.g. rmpgutah/rmpg-forensics

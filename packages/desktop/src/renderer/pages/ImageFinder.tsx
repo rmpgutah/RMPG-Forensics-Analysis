@@ -14,7 +14,8 @@ import {
   Camera,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, LogConsole, FolderPicker } from '../components/common';
+import { PageHeader, LogConsole, FolderPicker, MapPreview } from '../components/common';
+import type { MapPoint } from '../components/common';
 import { useIpc } from '../hooks';
 
 type SearchMode = 'hash' | 'exif' | 'geolocation';
@@ -121,13 +122,29 @@ export const ImageFinder: React.FC = () => {
               `"${r.filename}","${r.path}","${r.hash}",${r.size},"${r.width}x${r.height}","${r.dateTaken ?? ''}","${r.cameraMake ?? ''} ${r.cameraModel ?? ''}",${r.latitude ?? ''},${r.longitude ?? ''}`
           ),
         ].join('\n');
-        await ipc.invoke('fs:write-file', savePath, csv);
+        await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, csv);
         addLog(`Exported ${results.length} results to CSV.`);
       }
     } catch {
       addLog('Export failed.');
     }
   };
+
+  // Map points derived from filtered results — only images with EXIF GPS
+  // are mappable. Memoised so the map only re-renders when the geo-tagged
+  // subset actually changes (filter text edits that don't touch geo are
+  // free).
+  const mapPoints = useMemo<MapPoint[]>(() => {
+    return results
+      .filter((r) => typeof r.latitude === 'number' && typeof r.longitude === 'number')
+      .map((r) => ({
+        latitude: r.latitude as number,
+        longitude: r.longitude as number,
+        label: r.filename,
+        timestamp: r.dateTaken,
+        source: r.cameraMake || r.cameraModel ? `${r.cameraMake ?? ''} ${r.cameraModel ?? ''}`.trim() : undefined,
+      }));
+  }, [results]);
 
   const filteredResults = useMemo(() => {
     if (!filterText) return results;
@@ -155,13 +172,14 @@ export const ImageFinder: React.FC = () => {
         icon={<ImageIcon size={24} />}
       />
       <div className="flex items-center">
-        <span className="badge bg-yellow-100 text-yellow-700 text-[10px]">BETA</span>
+        <span className="badge text-yellow-400 text-[10px]" style={{ background: 'rgba(234,179,8,0.12)' }}>BETA</span>
       </div>
 
       {/* Search configuration */}
       <div className="card">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Source Directory"
             value={sourceDir}
             onChange={setSourceDir}
@@ -301,6 +319,14 @@ export const ImageFinder: React.FC = () => {
         </div>
       </div>
 
+      {/* Geo-tagged results map — only renders when at least one image has
+          EXIF GPS. Same persistent-instance Leaflet component used by
+          GeolocationMapper, so panning / zooming stays smooth as the user
+          types into the filter box. */}
+      {mapPoints.length > 0 && (
+        <MapPreview points={mapPoints} height={360} />
+      )}
+
       {/* Results toolbar */}
       {results.length > 0 && (
         <div className="flex items-center justify-between">
@@ -396,7 +422,7 @@ export const ImageFinder: React.FC = () => {
                       key={img.id}
                       onClick={() => setSelectedImage(img)}
                       className={`cursor-pointer hover:bg-[var(--bg-hover)] ${
-                        selectedImage?.id === img.id ? 'bg-blue-50' : ''
+                        selectedImage?.id === img.id ? 'bg-[rgba(100,149,237,0.12)]' : ''
                       }`}
                     >
                       <td className="px-3 py-2 text-xs font-medium text-[var(--text-primary)] truncate max-w-[200px]">

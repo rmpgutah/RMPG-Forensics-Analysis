@@ -171,6 +171,7 @@ export const HashGenerator: React.FC = () => {
           {activeTab === 'directory' && (
             <>
               <FolderPicker
+            role="source"
                 label="Select Directory"
                 value={directoryPath}
                 onChange={setDirectoryPath}

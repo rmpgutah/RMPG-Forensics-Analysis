@@ -83,17 +83,18 @@ export const FileExtraction: React.FC = () => {
           />
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-slate-300">Remote Path</label>
+            <label className="block text-sm font-medium text-[var(--text-primary)]">Remote Path</label>
             <input
               type="text"
               value={remotePath}
               onChange={(e) => setRemotePath(e.target.value)}
               disabled={process.isRunning}
-              className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="input-field w-full"
             />
           </div>
 
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}
@@ -102,12 +103,12 @@ export const FileExtraction: React.FC = () => {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-slate-300">File Formats</label>
+              <label className="text-sm font-medium text-[var(--text-primary)]">File Formats</label>
               <div className="flex gap-2 text-xs">
                 <button onClick={selectAll} className="text-blue-400 hover:text-blue-300">
                   Select All
                 </button>
-                <span className="text-slate-600">|</span>
+                <span className="text-[var(--text-muted)]">|</span>
                 <button onClick={selectNone} className="text-blue-400 hover:text-blue-300">
                   Clear All
                 </button>
@@ -117,7 +118,7 @@ export const FileExtraction: React.FC = () => {
               {FILE_FORMATS.map(({ ext, label }) => (
                 <label
                   key={ext}
-                  className="flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 cursor-pointer hover:bg-slate-750"
+                  className="flex items-center gap-2 rounded border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] cursor-pointer hover:bg-[var(--bg-secondary)]"
                 >
                   <input
                     type="checkbox"
@@ -146,6 +147,12 @@ export const FileExtraction: React.FC = () => {
           {(process.isRunning || process.progress.percent > 0) && (
             <ProgressIndicator
               percent={process.progress.percent}
+              bytes={process.progress.bytes}
+              totalBytes={process.progress.totalBytes}
+              speed={process.progress.speed}
+              eta={process.progress.eta}
+              filesCount={process.progress.filesCount}
+              totalFiles={process.progress.totalFiles}
               message={process.progress.message}
               isRunning={process.isRunning}
             />

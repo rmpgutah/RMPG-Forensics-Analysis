@@ -69,6 +69,7 @@ export const ScreenCapture: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Save Location"
             value={saveFolder}
             onChange={setSaveFolder}

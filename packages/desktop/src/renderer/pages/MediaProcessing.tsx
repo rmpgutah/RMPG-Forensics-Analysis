@@ -21,8 +21,8 @@ export const MediaProcessing: React.FC = () => {
     addLog('Starting media processing...');
     try {
       await ipc.invoke(IPC_CHANNELS.MEDIA_PROCESS, {
-        sourcePath: sourceFolder,
-        outputPath: outputFolder,
+        inputDir: sourceFolder,
+        outputDir: outputFolder,
       });
       addLog('Media processing completed.');
     } catch (err) {
@@ -61,6 +61,7 @@ export const MediaProcessing: React.FC = () => {
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-4">
           <FolderPicker
+            role="source"
             label="Media Source Folder"
             value={sourceFolder}
             onChange={setSourceFolder}
@@ -68,6 +69,7 @@ export const MediaProcessing: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output / Report Folder"
             value={outputFolder}
             onChange={setOutputFolder}
@@ -96,9 +98,9 @@ export const MediaProcessing: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-            <h4 className="mb-2 text-sm font-medium text-white">Instructions</h4>
-            <ul className="space-y-1 text-xs text-slate-400">
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4">
+            <h4 className="mb-2 text-sm font-medium text-[var(--text-primary)]">Instructions</h4>
+            <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
               <li>1. Select the folder containing media files to process.</li>
               <li>2. Choose an output folder for processed files and reports.</li>
               <li>3. Click "Process Media" to analyze and organize files.</li>

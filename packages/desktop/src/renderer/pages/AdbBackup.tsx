@@ -31,11 +31,12 @@ export const AdbBackup: React.FC = () => {
     });
     // After backup, compute hashes
     try {
-      const hashResult = (await window.api.invoke(IPC_CHANNELS.HASH_COMPUTE_FILE, {
-        filePath: `${outputFolder}/backup.ab`,
-        algorithms: ['md5', 'sha256'],
-      })) as { md5: string; sha256: string };
-      setHashes(hashResult);
+      const backupFile = `${outputFolder}/backup.ab`;
+      const [md5Result, sha256Result] = await Promise.all([
+        window.api.invoke(IPC_CHANNELS.HASH_COMPUTE_FILE, backupFile, 'md5') as Promise<{ hash: string }>,
+        window.api.invoke(IPC_CHANNELS.HASH_COMPUTE_FILE, backupFile, 'sha256') as Promise<{ hash: string }>,
+      ]);
+      setHashes({ md5: md5Result.hash, sha256: sha256Result.hash });
     } catch {
       // Hash computation may fail if no file produced
     }
@@ -61,6 +62,7 @@ export const AdbBackup: React.FC = () => {
           />
 
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}
@@ -107,6 +109,12 @@ export const AdbBackup: React.FC = () => {
           {(process.isRunning || process.progress.percent > 0) && (
             <ProgressIndicator
               percent={process.progress.percent}
+              bytes={process.progress.bytes}
+              totalBytes={process.progress.totalBytes}
+              speed={process.progress.speed}
+              eta={process.progress.eta}
+              filesCount={process.progress.filesCount}
+              totalFiles={process.progress.totalFiles}
               message={process.progress.message}
               isRunning={process.isRunning}
             />

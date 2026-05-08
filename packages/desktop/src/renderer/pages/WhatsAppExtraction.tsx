@@ -73,9 +73,11 @@ export const WhatsAppExtraction: React.FC = () => {
 
   const handleConfirmStart = async () => {
     setShowWarning(false);
+    if (!selectedDevice) return;
     setCurrentStep(0);
+    // error from a previous run is cleared by useProcess.start() itself
     await process.start({
-      serial: selectedDevice!.serial,
+      serial: selectedDevice.serial,
       packageName: selectedPackage,
       downgradApkPath: downgradeApk || undefined,
       extractContacts: extractOptions.contacts,
@@ -221,6 +223,12 @@ export const WhatsAppExtraction: React.FC = () => {
           {(process.isRunning || process.progress.percent > 0) && (
             <ProgressIndicator
               percent={process.progress.percent}
+              bytes={process.progress.bytes}
+              totalBytes={process.progress.totalBytes}
+              speed={process.progress.speed}
+              eta={process.progress.eta}
+              filesCount={process.progress.filesCount}
+              totalFiles={process.progress.totalFiles}
               message={process.progress.message}
               isRunning={process.isRunning}
             />

@@ -107,7 +107,7 @@ export const MvtScanner: React.FC = () => {
               `"${r.severity}","${r.module}","${r.indicator}","${r.description}","${r.matchedData}","${r.timestamp ?? ''}"`
           ),
         ].join('\n');
-        await ipc.invoke('fs:write-file', savePath, csv);
+        await ipc.invoke(IPC_CHANNELS.FILE_WRITE, savePath, csv);
         addLog(`Results exported to: ${savePath}`);
       }
     } catch (err) {
@@ -191,6 +191,7 @@ export const MvtScanner: React.FC = () => {
 
           <div className="space-y-4">
             <FolderPicker
+            role="output"
               label="Output Directory (Optional)"
               value={outputDir}
               onChange={setOutputDir}

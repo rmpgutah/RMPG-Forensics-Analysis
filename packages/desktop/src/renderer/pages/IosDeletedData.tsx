@@ -29,7 +29,8 @@ import {
   X,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar, ProgressIndicator } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -166,7 +167,8 @@ export const IosDeletedData: React.FC = () => {
   const [filteredRecords, setFilteredRecords] = useState<DeletedRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
-  const [recoverProgress, setRecoverProgress] = useState(0);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [recoverProgress, setRecoverProgress] = useState<{ percent: number; message?: string; bytes?: number; totalBytes?: number; speed?: number; eta?: number; filesCount?: number; totalFiles?: number }>({ percent: 0 });
   const [stats, setStats] = useState<RecoveryStats | null>(null);
   const [timeline, setTimeline] = useState<DeletionTimelineEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -179,13 +181,6 @@ export const IosDeletedData: React.FC = () => {
   const [selectedRecord, setSelectedRecord] = useState<DeletedRecord | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const pageSize = 50;
-
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, { title: 'Select iOS Backup Folder' });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
 
   const handleBrowseOutput = async () => {
     try {
@@ -200,6 +195,7 @@ export const IosDeletedData: React.FC = () => {
     setRecords([]);
     setStats(null);
     setTimeline([]);
+    setExtractError(null);
     try {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_DELETED_RECOVER, {
         backupPath,
@@ -209,12 +205,14 @@ export const IosDeletedData: React.FC = () => {
         records: DeletedRecord[];
         stats: RecoveryStats;
         timeline: DeletionTimelineEntry[];
+        error?: string;
       };
-      setRecords(result.records);
+      if (result.error) setExtractError(result.error);
+      setRecords(result.records ?? []);
       setStats(result.stats);
-      setTimeline(result.timeline);
+      setTimeline(result.timeline ?? []);
     } catch (err) {
-      console.error('Deleted data scan failed:', err);
+      setExtractError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -223,7 +221,7 @@ export const IosDeletedData: React.FC = () => {
   const handleRecover = async (ids?: string[]) => {
     if (!outputPath) return;
     setRecovering(true);
-    setRecoverProgress(0);
+    setRecoverProgress({ percent: 0 });
     try {
       await window.api.invoke(IPC_CHANNELS.IOS_DELETED_RECOVER, {
         backupPath,
@@ -239,9 +237,14 @@ export const IosDeletedData: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_DELETED_RECOVER_PROGRESS, (_event: unknown, data: { percent: number }) => {
-      setRecoverProgress(data.percent);
-      if (data.percent >= 100) setRecovering(false);
+    // preload's `api.on` invokes the callback as `callback(...args)` —
+    // no leading event arg. Old `(_event, data)` captured `undefined` as
+    // `data` so recovery progress never updated.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_DELETED_RECOVER_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? {}) as Record<string, unknown>;
+      const pct = typeof data.percent === 'number' ? data.percent : 0;
+      setRecoverProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
+      if (pct >= 100) setRecovering(false);
     });
     return () => { cleanup?.(); };
   }, []);
@@ -291,16 +294,21 @@ export const IosDeletedData: React.FC = () => {
         icon={<Apple size={24} />}
       />
 
+      {extractError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-700/50 bg-red-900/20 px-4 py-2 text-sm text-red-400">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>{extractError}</span>
+        </div>
+      )}
+
       {/* Source + Output */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>iOS Backup Source</label>
-            <div className="flex gap-2">
-              <input type="text" value={backupPath} readOnly placeholder="Select iOS backup folder..." className="input-field flex-1" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading}>Browse</button>
-            </div>
-          </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading}
+          />
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Recovery Output Folder</label>
             <div className="flex gap-2">
@@ -308,33 +316,36 @@ export const IosDeletedData: React.FC = () => {
               <button onClick={handleBrowseOutput} className="btn-secondary" disabled={recovering}>Browse</button>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleScan} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Search size={16} className="mr-2" />}
-            {loading ? 'Deep Scanning...' : 'Scan for Deleted Data'}
-          </button>
-          {records.length > 0 && (
-            <>
+          <div className="flex justify-end gap-2">
+            <button onClick={handleScan} className="btn-primary" disabled={!backupPath || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Deep Scanning...' : 'Scan for Deleted Data'}
+            </button>
+            {records.length > 0 && (
               <button onClick={() => handleRecover()} className="btn-primary" disabled={!outputPath || recovering}>
-                {recovering ? <Loader2 size={16} className="animate-spin mr-2" /> : <RefreshCw size={16} className="mr-2" />}
+                {recovering ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
                 {selectedIds.size > 0 ? `Recover Selected (${selectedIds.size})` : 'Recover All'}
               </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Recovery Progress */}
       {recovering && (
-        <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="flex justify-between text-sm mb-2">
-            <span style={{ color: 'var(--text-primary)' }}>Recovering deleted data...</span>
-            <span style={{ color: 'var(--text-secondary)' }}>{Math.round(recoverProgress)}%</span>
-          </div>
-          <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-            <div className="h-2 rounded-full bg-green-500 transition-all" style={{ width: `${recoverProgress}%` }} />
-          </div>
+        <div className="card p-4">
+          <ProgressIndicator
+            percent={recoverProgress.percent}
+            message={recoverProgress.message || 'Recovering deleted data…'}
+            isRunning={recovering}
+            showElapsed
+            bytes={recoverProgress.bytes}
+            totalBytes={recoverProgress.totalBytes}
+            speed={recoverProgress.speed}
+            eta={recoverProgress.eta}
+            filesCount={recoverProgress.filesCount}
+            totalFiles={recoverProgress.totalFiles}
+          />
         </div>
       )}
 
@@ -401,7 +412,7 @@ export const IosDeletedData: React.FC = () => {
                   />
                   {i % Math.ceil(timeline.length / 8) === 0 && (
                     <span className="text-[10px] mt-1 rotate-45 origin-left" style={{ color: 'var(--text-muted)' }}>
-                      {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      {fmtDate(entry.date)}
                     </span>
                   )}
                 </div>
@@ -518,9 +529,9 @@ export const IosDeletedData: React.FC = () => {
                       {record.previewData || record.description}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(record.deletedDate).toLocaleDateString()}{' '}
+                      {fmtDate(record.deletedDate)}{' '}
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(record.deletedDate).toLocaleTimeString()}
+                        {fmtTime(record.deletedDate)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -585,8 +596,8 @@ export const IosDeletedData: React.FC = () => {
                 { label: 'Title', value: selectedRecord.title },
                 { label: 'Category', value: getCategoryLabel(selectedRecord.category) },
                 { label: 'Original Path', value: selectedRecord.originalPath },
-                { label: 'Created Date', value: new Date(selectedRecord.createdDate).toLocaleString() },
-                { label: 'Deleted Date', value: new Date(selectedRecord.deletedDate).toLocaleString() },
+                { label: 'Created Date', value: fmtDateTime(selectedRecord.createdDate) },
+                { label: 'Deleted Date', value: fmtDateTime(selectedRecord.deletedDate) },
                 { label: 'Recovery Source', value: getSourceLabel(selectedRecord.recoverySource) },
                 { label: 'Data Size', value: formatBytes(selectedRecord.dataSize) },
                 { label: 'Recoverable', value: selectedRecord.isRecoverable ? 'Yes' : 'No' },

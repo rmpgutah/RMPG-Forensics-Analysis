@@ -16,7 +16,15 @@ export interface SettingsState {
     defaultOutputDir: string;
     hashAlgorithm: 'md5' | 'sha1' | 'sha256';
     logLevel: 'info' | 'debug' | 'warning' | 'error';
-    theme: 'dark';
+    theme: 'dark' | 'light';
+    /**
+     * Examination-mode write blocker. When true, any IPC operation that
+     * would write to or modify a connected device is refused at the
+     * renderer side AND surfaces a banner. This is policy-level
+     * enforcement (matches UFED PA "examination mode") — the kernel-level
+     * read-only mount is out of scope for an Electron app.
+     */
+    writeBlocker: boolean;
   };
 
   setToolPath: (tool: keyof SettingsState['toolPaths'], path: string) => void;
@@ -43,6 +51,7 @@ const defaultPreferences = {
   hashAlgorithm: 'sha256' as const,
   logLevel: 'info' as const,
   theme: 'dark' as const,
+  writeBlocker: true, // Default ON — courtroom-safe by default; analyst opts out for restoration tasks.
 };
 
 export const useSettingsStore = create<SettingsState>()(

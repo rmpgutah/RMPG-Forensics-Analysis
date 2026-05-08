@@ -1,12 +1,14 @@
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import type { ProcessProgress, ForensicCase } from '@rmpg/shared';
+import type { ProcessProgress } from '@rmpg/shared';
 import {
   syncCaseToCloud,
   fetchCaseFromCloud,
-  fetchAllCases,
   uploadCaseFile,
+  listCaseFiles,
+  downloadCaseFile,
 } from '@rmpg/shared';
 import * as caseManager from '../services/case-manager';
 
@@ -30,7 +32,7 @@ export function registerSyncHandlers(): void {
       }
     ) => {
       const { userId, casePath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -59,7 +61,13 @@ export function registerSyncHandlers(): void {
 
       let uploadedCount = 0;
       for (const filePath of allFiles) {
-        const relativePath = filePath.replace(casePath, '').replace(/^[/\\]/, '');
+        // Firebase Storage paths use forward slashes universally — normalise
+        // the OS-specific separator so Windows-uploaded files can be located
+        // by listCaseFiles on download.
+        const relativePath = path
+          .relative(casePath, filePath)
+          .split(path.sep)
+          .join('/');
         const fileBuffer = await fs.readFile(filePath);
 
         await uploadCaseFile(userId, forensicCase.id, relativePath, fileBuffer);
@@ -96,7 +104,7 @@ export function registerSyncHandlers(): void {
       }
     ) => {
       const { userId, caseId, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -128,11 +136,34 @@ export function registerSyncHandlers(): void {
       });
 
       sendProgress(`Local case created at: ${localCase.localPath}`);
-      sendProgress('Download complete. Note: File attachments must be synced separately.');
+
+      // Pull every uploaded artifact down to the local case folder. The
+      // relative paths returned by listCaseFiles match what uploadCaseFile
+      // wrote, so we can rebuild the directory layout 1:1.
+      sendProgress('Listing remote case files...');
+      const remoteFiles = await listCaseFiles(userId, caseId);
+
+      let downloadedCount = 0;
+      for (const relativePath of remoteFiles) {
+        const bytes = await downloadCaseFile(userId, caseId, relativePath);
+        const destPath = path.join(localCase.localPath, relativePath);
+        await fs.mkdir(path.dirname(destPath), { recursive: true });
+        await fs.writeFile(destPath, bytes);
+        downloadedCount++;
+
+        if (downloadedCount % 10 === 0) {
+          sendProgress(
+            `Downloaded ${downloadedCount}/${remoteFiles.length} files...`
+          );
+        }
+      }
+
+      sendProgress(`Download complete. ${downloadedCount} files synced.`);
 
       return {
         success: true,
         localCase,
+        filesDownloaded: downloadedCount,
       };
     }
   );
@@ -150,7 +181,7 @@ async function collectAllFiles(dirPath: string): Promise<string[]> {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
-    const fullPath = `${dirPath}/${entry.name}`;
+    const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
       const nested = await collectAllFiles(fullPath);
       results.push(...nested);

@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader, DeviceSelector, FolderPicker, FilePicker } from '../components/common';
+import { PageHeader, DeviceSelector, FolderPicker, FilePicker, MapPreview } from '../components/common';
 import { useDeviceStatus } from '../hooks';
 
 type ExtractionSource = 'device' | 'images' | 'database' | 'csv';
@@ -97,7 +97,7 @@ export const GeolocationMapper: React.FC = () => {
       const rows = points.map(
         (p) => `${p.latitude},${p.longitude},${p.altitude ?? ''},${p.timestamp ?? ''},${p.source},${p.label ?? ''}`
       );
-      await window.api.invoke('fs:write-file', csvPath, [header, ...rows].join('\n'));
+      await window.api.invoke(IPC_CHANNELS.FILE_WRITE, csvPath, [header, ...rows].join('\n'));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -126,9 +126,10 @@ export const GeolocationMapper: React.FC = () => {
                   }}
                   className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                     source === opt.key
-                      ? 'border-[#6495ED] bg-blue-50'
+                      ? 'border-[#6495ED]'
                       : 'border-[var(--border-color)] hover:border-[var(--border-color)] hover:bg-[var(--bg-hover)]'
                   }`}
+                  style={source === opt.key ? { background: 'rgba(100,149,237,0.12)' } : {}}
                 >
                   <span className={source === opt.key ? 'text-[#6495ED]' : 'text-[var(--text-muted)]'}>
                     {opt.icon}
@@ -200,7 +201,19 @@ export const GeolocationMapper: React.FC = () => {
               )}
             </div>
 
-            <div className="max-h-[440px] overflow-y-auto rounded-lg border border-[var(--border-color)]">
+            {/*
+              Live map preview — uses the MapPreview component (Leaflet +
+              marker clustering). Stays mounted across re-renders so pan/zoom
+              state survives toggling other UI on the page; only the marker
+              layer is rebuilt when `points` changes.
+            */}
+            {points.length > 0 && (
+              <div className="mb-3">
+                <MapPreview points={points} height={360} />
+              </div>
+            )}
+
+            <div className="max-h-[300px] overflow-y-auto rounded-lg border border-[var(--border-color)]">
               {points.length === 0 ? (
                 <div className="py-12 text-center">
                   <Globe size={32} className="mx-auto mb-2 text-[var(--text-muted)]" />
@@ -219,7 +232,7 @@ export const GeolocationMapper: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-color)]">
                     {points.map((p, i) => (
-                      <tr key={i} className="hover:bg-[#F0F0FF]">
+                      <tr key={i} className="hover:bg-[var(--bg-hover)]">
                         <td className="px-3 py-1.5 text-[var(--text-muted)]">{i + 1}</td>
                         <td className="px-3 py-1.5 font-mono text-[var(--text-primary)]">{p.latitude.toFixed(6)}</td>
                         <td className="px-3 py-1.5 font-mono text-[var(--text-primary)]">{p.longitude.toFixed(6)}</td>
@@ -233,7 +246,8 @@ export const GeolocationMapper: React.FC = () => {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-500/40 p-3 text-sm text-red-400"
+              style={{ background: 'rgba(239,68,68,0.1)' }}>
               {error}
             </div>
           )}
@@ -256,6 +270,7 @@ export const GeolocationMapper: React.FC = () => {
               </div>
 
               <FolderPicker
+            role="output"
                 label="Output Folder"
                 value={outputFolder}
                 onChange={setOutputFolder}

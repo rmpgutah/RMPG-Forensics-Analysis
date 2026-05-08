@@ -175,6 +175,7 @@ export const MiscCollections: React.FC = () => {
             disabled={collecting}
           />
           <FolderPicker
+            role="output"
             label="Output Folder"
             value={outputFolder}
             onChange={setOutputFolder}

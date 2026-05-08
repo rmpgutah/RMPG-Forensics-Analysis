@@ -25,7 +25,9 @@ export const TrashRecovery: React.FC = () => {
   const addLog = (msg: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
   const handleScan = async () => {
-    if (!selectedDevice) return;
+    if (!selectedDevice || scanning) return;  // guard double-clicks (the
+    // user reported the scan running twice in one click — happens when
+    // the button gets focus + click in quick succession on macOS).
     setScanning(true);
     setFoundFiles([]);
     setSelectedFiles(new Set());
@@ -114,6 +116,7 @@ export const TrashRecovery: React.FC = () => {
           </button>
 
           <FolderPicker
+            role="output"
             label="Recovery Destination"
             value={outputFolder}
             onChange={setOutputFolder}

@@ -21,7 +21,8 @@ import {
   X,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, ProgressIndicator } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -107,7 +108,7 @@ export const IosAppData: React.FC = () => {
   const [filteredApps, setFilteredApps] = useState<AppRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
-  const [extractProgress, setExtractProgress] = useState(0);
+  const [extractProgress, setExtractProgress] = useState<{ percent: number; message?: string; bytes?: number; totalBytes?: number; speed?: number; eta?: number; filesCount?: number; totalFiles?: number }>({ percent: 0 });
   const [stats, setStats] = useState<AppDataStats | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -137,7 +138,7 @@ export const IosAppData: React.FC = () => {
       const result = await window.api.invoke(IPC_CHANNELS.IOS_APP_DATA, {
         backupPath,
       }) as { apps: AppRecord[]; stats: AppDataStats };
-      setApps(result.apps);
+      setApps(result.apps ?? []);
       setStats(result.stats);
     } catch (err) {
       console.error('App scan failed:', err);
@@ -165,7 +166,7 @@ export const IosAppData: React.FC = () => {
   const handleExtractAll = async () => {
     if (!outputPath) return;
     setExtracting(true);
-    setExtractProgress(0);
+    setExtractProgress({ percent: 0 });
     try {
       await window.api.invoke(IPC_CHANNELS.IOS_APP_DATA_EXTRACT, {
         backupPath,
@@ -197,9 +198,13 @@ export const IosAppData: React.FC = () => {
   };
 
   useEffect(() => {
-    const cleanup = window.api.on(IPC_CHANNELS.IOS_APP_DATA_PROGRESS, (_event: unknown, data: { percent: number }) => {
-      setExtractProgress(data.percent);
-      if (data.percent >= 100) setExtracting(false);
+    // preload `api.on` invokes callback as `callback(...args)` — no event
+    // arg. Old `(_event, data)` made `data` undefined → progress stuck.
+    const cleanup = window.api.on(IPC_CHANNELS.IOS_APP_DATA_PROGRESS, (...args: unknown[]) => {
+      const data = (args[0] ?? {}) as Record<string, unknown>;
+      const pct = typeof data.percent === 'number' ? data.percent : 0;
+      setExtractProgress({ percent: pct, message: data.message as string | undefined, bytes: data.bytes as number | undefined, totalBytes: data.totalBytes as number | undefined, speed: data.speed as number | undefined, eta: data.eta as number | undefined, filesCount: data.filesCount as number | undefined, totalFiles: data.totalFiles as number | undefined });
+      if (pct >= 100) setExtracting(false);
     });
     return () => { cleanup?.(); };
   }, []);
@@ -279,14 +284,19 @@ export const IosAppData: React.FC = () => {
 
       {/* Progress */}
       {extracting && (
-        <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-          <div className="flex justify-between text-sm mb-2">
-            <span style={{ color: 'var(--text-primary)' }}>Extracting app data...</span>
-            <span style={{ color: 'var(--text-secondary)' }}>{Math.round(extractProgress)}%</span>
-          </div>
-          <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-            <div className="h-2 rounded-full bg-blue-500 transition-all" style={{ width: `${extractProgress}%` }} />
-          </div>
+        <div className="card p-4">
+          <ProgressIndicator
+            percent={extractProgress.percent}
+            message={extractProgress.message || 'Extracting app data…'}
+            isRunning={extracting}
+            showElapsed
+            bytes={extractProgress.bytes}
+            totalBytes={extractProgress.totalBytes}
+            speed={extractProgress.speed}
+            eta={extractProgress.eta}
+            filesCount={extractProgress.filesCount}
+            totalFiles={extractProgress.totalFiles}
+          />
         </div>
       )}
 
@@ -344,7 +354,19 @@ export const IosAppData: React.FC = () => {
       {/* App List */}
       {filteredApps.length > 0 && (
         <div className="space-y-2">
-          {filteredApps.map((app) => {
+          {filteredApps.map((rawApp) => {
+            // Defensive: the iOS app-data IPC sometimes returns app records
+            // with one or more of these arrays undefined (e.g. apps with no
+            // accessible Documents/, partial scrapes, sandbox permission
+            // denials). Spreading undefined throws "Cannot read properties of
+            // undefined (reading 'length')" — normalize once here so every
+            // downstream `.length` / `.map` / `.slice` is safe.
+            const app = {
+              ...rawApp,
+              documents: rawApp.documents ?? [],
+              caches: rawApp.caches ?? [],
+              databases: rawApp.databases ?? [],
+            };
             const isExpanded = expandedApps.has(app.id);
             const allFiles = [...app.documents, ...app.caches, ...app.databases];
 
@@ -384,8 +406,8 @@ export const IosAppData: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                      <div>Installed: {new Date(app.installDate).toLocaleDateString()}</div>
-                      <div>Last used: {new Date(app.lastUsed).toLocaleDateString()}</div>
+                      <div>Installed: {fmtDate(app.installDate)}</div>
+                      <div>Last used: {fmtDate(app.lastUsed)}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="badge-info text-xs px-2 py-0.5 rounded-full">{app.databases.length} DB</span>
@@ -426,7 +448,7 @@ export const IosAppData: React.FC = () => {
                               </div>
                               <div className="flex items-center gap-4">
                                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatBytes(f.size)}</span>
-                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(f.modified).toLocaleDateString()}</span>
+                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtDate(f.modified)}</span>
                               </div>
                             </div>
                           ))}

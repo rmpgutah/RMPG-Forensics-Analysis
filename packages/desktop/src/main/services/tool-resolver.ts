@@ -21,9 +21,17 @@ const TOOL_BINARIES: Record<ToolName, { win32: string; posix: string }> = {
   idevice_id:       { win32: 'idevice_id.exe',       posix: 'idevice_id' },
   ideviceinfo:      { win32: 'ideviceinfo.exe',      posix: 'ideviceinfo' },
   ideviceinstaller: { win32: 'ideviceinstaller.exe', posix: 'ideviceinstaller' },
-  scrcpy:           { win32: 'scrcpy.exe',           posix: 'scrcpy' },
-  instaloader:      { win32: 'instaloader.exe',      posix: 'instaloader' },
-  odin:             { win32: 'Odin3.exe',            posix: 'odin' },
+  scrcpy:              { win32: 'scrcpy.exe',              posix: 'scrcpy' },
+  instaloader:         { win32: 'instaloader.exe',         posix: 'instaloader' },
+  odin:                { win32: 'Odin3.exe',               posix: 'odin' },
+  jadx:                { win32: 'jadx.bat',                posix: 'jadx' },
+  idevicescreenshot:   { win32: 'idevicescreenshot.exe',   posix: 'idevicescreenshot' },
+  idevicediagnostics:  { win32: 'idevicediagnostics.exe',  posix: 'idevicediagnostics' },
+  // Breach & Bypass — pip-installed CLIs. mtkclient ships its CLI as `mtk`,
+  // edl as `edl`, and iphone_backup_decrypt provides `iphone_backup_decrypt`.
+  edl:                       { win32: 'edl.exe',                       posix: 'edl' },
+  mtk:                       { win32: 'mtk.exe',                       posix: 'mtk' },
+  iphone_backup_decrypt:     { win32: 'iphone_backup_decrypt.exe',     posix: 'iphone_backup_decrypt' },
 };
 
 /**
@@ -37,6 +45,9 @@ const VERSION_FLAGS: Partial<Record<ToolName, string[]>> = {
   java:       ['-version'],
   scrcpy:     ['--version'],
   instaloader: ['--version'],
+  edl:                   ['--help'],          // edl has no --version; --help exits 0
+  mtk:                   ['--help'],          // same for mtkclient
+  iphone_backup_decrypt: ['--version'],
 };
 
 // ---------------------------------------------------------------------------
@@ -134,14 +145,30 @@ async function getToolVersion(toolPath: string, toolName: ToolName): Promise<str
   if (!flags) return undefined;
   try {
     const result = await runCommand(toolPath, flags, { timeout: 10000 });
+    // Non-zero exit means the binary exists but isn't actually working
+    // (classic case: macOS's /usr/bin/java stub printing "Unable to locate
+    // a Java Runtime"). Treat that as "no version" so resolveTool can
+    // downgrade it to not-found rather than reporting the error string as
+    // the version.
+    if (result.exitCode !== 0) return undefined;
     const output = (result.stdout + result.stderr).trim();
-    // Extract the first line which usually contains the version
-    const firstLine = output.split(/\r?\n/)[0];
-    return firstLine || undefined;
+    if (!output) return undefined;
+    const firstLine = output.split(/\r?\n/)[0].trim();
+    // Reject anything that doesn't look like a version line (must contain
+    // at least one numeric token like "1.2" or "21").
+    if (!/\d/.test(firstLine)) return undefined;
+    return firstLine;
   } catch {
     return undefined;
   }
 }
+
+/**
+ * Tools whose presence on disk is meaningless without a working runtime —
+ * if version detection fails for these, treat them as not-found. Java is the
+ * primary case (macOS ships a stub that fails when no JRE is installed).
+ */
+const REQUIRES_WORKING_VERSION: ReadonlySet<ToolName> = new Set<ToolName>(['java']);
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -159,7 +186,6 @@ async function getToolVersion(toolPath: string, toolName: ToolName): Promise<str
  */
 export async function resolveTool(name: ToolName): Promise<ToolInfo> {
   const platform = getPlatform();
-  const binaryName = getBinaryName(name);
 
   const notFound: ToolInfo = {
     name,
@@ -167,6 +193,11 @@ export async function resolveTool(name: ToolName): Promise<ToolInfo> {
     found: false,
     platform,
   };
+
+  // Guard against unknown tool names (e.g. from older callers)
+  if (!TOOL_BINARIES[name]) return notFound;
+
+  const binaryName = getBinaryName(name);
 
   // 1. Check user-configured path
   const userPaths = await loadUserPaths();
@@ -196,6 +227,7 @@ export async function resolveTool(name: ToolName): Promise<ToolInfo> {
   const systemPath = await findOnPath(binaryName);
   if (systemPath) {
     const version = await getToolVersion(systemPath, name);
+    if (REQUIRES_WORKING_VERSION.has(name) && !version) return notFound;
     return { name, path: systemPath, found: true, version, platform };
   }
 
@@ -205,6 +237,7 @@ export async function resolveTool(name: ToolName): Promise<ToolInfo> {
     const altPath = await findOnPath(nameWithoutExt);
     if (altPath) {
       const version = await getToolVersion(altPath, name);
+      if (REQUIRES_WORKING_VERSION.has(name) && !version) return notFound;
       return { name, path: altPath, found: true, version, platform };
     }
   }

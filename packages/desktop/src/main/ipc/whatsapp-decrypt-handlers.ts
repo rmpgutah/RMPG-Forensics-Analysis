@@ -28,7 +28,7 @@ export function registerWhatsAppDecryptHandlers(): void {
       }
     ) => {
       const { encryptedDbPath, keyFilePath, outputPath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -37,7 +37,7 @@ export function registerWhatsAppDecryptHandlers(): void {
           timestamp: Date.now(),
         };
         if (win && !win.isDestroyed()) {
-          win.webContents.send(IPC_CHANNELS.PROCESS_PROGRESS, progress);
+          win.webContents.send(IPC_CHANNELS.WHATSAPP_DECRYPT_PROGRESS, progress);
         }
       };
 
@@ -106,7 +106,7 @@ export function registerWhatsAppDecryptHandlers(): void {
         {},
         (p) => {
           if (win && !win.isDestroyed()) {
-            win.webContents.send(IPC_CHANNELS.PROCESS_PROGRESS, p);
+            win.webContents.send(IPC_CHANNELS.WHATSAPP_DECRYPT_PROGRESS, p);
           }
         }
       );
@@ -146,16 +146,24 @@ export function registerWhatsAppDecryptHandlers(): void {
       }
     ) => {
       const { mediaDir, keyFilePath, outputDir } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
-      const sendProgress = (message: string): void => {
+      const sendProgress = (
+        message: string,
+        percent?: number,
+        filesCount?: number,
+        totalFiles?: number
+      ): void => {
         const progress: ProcessProgress = {
-          type: 'status',
+          type: percent !== undefined ? 'progress' : 'status',
           data: message,
+          percent,
+          filesCount,
+          totalFiles,
           timestamp: Date.now(),
         };
         if (win && !win.isDestroyed()) {
-          win.webContents.send(IPC_CHANNELS.PROCESS_PROGRESS, progress);
+          win.webContents.send(IPC_CHANNELS.WHATSAPP_DECRYPT_MEDIA_PROGRESS, progress);
         }
       };
 
@@ -166,11 +174,11 @@ export function registerWhatsAppDecryptHandlers(): void {
 
       await fs.mkdir(outputDir, { recursive: true });
 
-      sendProgress('Scanning for encrypted media files...');
+      sendProgress('Scanning for encrypted media files...', 0);
 
       // Find all .enc files in the media directory
       const encryptedFiles = await findEncryptedMediaFiles(mediaDir);
-      sendProgress(`Found ${encryptedFiles.length} encrypted media files.`);
+      sendProgress(`Found ${encryptedFiles.length} encrypted media files.`, 0, 0, encryptedFiles.length);
 
       let decryptedCount = 0;
       let failedCount = 0;
@@ -212,16 +220,25 @@ open(sys.argv[3], 'wb').write(decrypted)
           failedCount++;
         }
 
-        if ((decryptedCount + failedCount) % 10 === 0) {
-          sendProgress(
-            `Progress: ${decryptedCount + failedCount}/${encryptedFiles.length} ` +
-            `(${decryptedCount} decrypted, ${failedCount} failed)`
-          );
-        }
+        const processed = decryptedCount + failedCount;
+        const percent = encryptedFiles.length > 0
+          ? Math.round((processed / encryptedFiles.length) * 100)
+          : 100;
+
+        // Send progress every file (renderer can throttle display)
+        sendProgress(
+          `${processed}/${encryptedFiles.length} — ${decryptedCount} decrypted, ${failedCount} failed`,
+          percent,
+          processed,
+          encryptedFiles.length
+        );
       }
 
       sendProgress(
-        `Media decryption complete. ${decryptedCount} decrypted, ${failedCount} failed.`
+        `Media decryption complete. ${decryptedCount} decrypted, ${failedCount} failed.`,
+        100,
+        decryptedCount + failedCount,
+        encryptedFiles.length
       );
 
       return {

@@ -20,16 +20,24 @@ export function registerIpedHandlers(): void {
     IPC_CHANNELS.IPED_RUN,
     async (
       _event,
+      // The IpedIntegration page sends `evidencePath` while the original
+      // contract used `inputPath`. Accept both so the handler doesn't run
+      // with `inputPath: undefined` (which silently passed `undefined` as
+      // `-d` to IPED's CLI).
       options: {
-        inputPath: string;
+        inputPath?: string;
+        evidencePath?: string;
         outputPath: string;
         ipedJarPath?: string;
         profile?: string;
         additionalArgs?: string[];
       }
     ) => {
-      const { inputPath, outputPath, ipedJarPath, profile, additionalArgs } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const inputPath = options.inputPath ?? options.evidencePath;
+      const { outputPath, ipedJarPath, profile, additionalArgs } = options;
+      if (!inputPath) throw new Error('No evidence folder selected.');
+      if (!outputPath) throw new Error('No output folder selected.');
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {

@@ -13,12 +13,12 @@ win:
     - target: nsis
       arch:
         - x64
-  sign: false
-  signDlls: false
+  forceCodeSigning: false
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: RMPG-Forensics-Analysis-${version}-Setup.${ext}
+afterSign: afterSign.cjs
 mac:
   target:
     - target: dmg
@@ -31,12 +31,9 @@ mac:
         - arm64
   icon: resources/icons/icon.icns
   category: public.app-category.utilities
-  hardenedRuntime: true
-  entitlements: resources/entitlements.mac.plist
-  entitlementsInherit: resources/entitlements.mac.plist
+  identity: null
   artifactName: RMPG-Forensics-Analysis-${version}-${arch}.${ext}
 dmg:
-  sign: false
   contents:
     - x: 130
       y: 220

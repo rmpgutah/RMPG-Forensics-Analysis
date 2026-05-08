@@ -20,15 +20,23 @@ export function registerCopyAllHandlers(): void {
     IPC_CHANNELS.BULK_COPY,
     async (
       _event,
+      // BulkCopy page sends `{serial, outputPath}` (defaulting to /sdcard/
+      // as the source). Older callers send `{serial, remotePath, localPath}`.
+      // Accept both — previously `localPath: undefined` made adb pull crash.
       options: {
         serial: string;
-        remotePath: string;
-        localPath: string;
+        remotePath?: string;
+        localPath?: string;
+        outputPath?: string;
         paths?: string[];
       }
     ) => {
-      const { serial, remotePath = '/sdcard/', localPath, paths } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const { serial, paths } = options;
+      const remotePath = options.remotePath ?? '/sdcard/';
+      const localPath = options.localPath ?? options.outputPath;
+      if (!serial) throw new Error('No device selected.');
+      if (!localPath) throw new Error('No output folder selected.');
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -47,29 +55,54 @@ export function registerCopyAllHandlers(): void {
       const startTime = Date.now();
       let totalPulled = 0;
       let totalFailed = 0;
+      let totalBytes = 0;
 
       for (let i = 0; i < pullPaths.length; i++) {
         const currentRemotePath = pullPaths[i];
         const dirName = path.basename(currentRemotePath) || 'sdcard';
         const destPath = path.join(localPath, dirName);
 
-        sendProgress(
-          `[${i + 1}/${pullPaths.length}] Pulling: ${currentRemotePath}...`
-        );
+        const overallPercent = Math.round((i / pullPaths.length) * 100);
+        const startMsg = `[${i + 1}/${pullPaths.length}] Pulling: ${currentRemotePath}…`;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(IPC_CHANNELS.BULK_COPY_PROGRESS, {
+            type: 'status', data: startMsg, timestamp: Date.now(),
+            percent: overallPercent, message: startMsg,
+            filesCount: totalPulled,
+          } as ProcessProgress);
+        }
 
         try {
           await fs.mkdir(destPath, { recursive: true });
           const result = await adbService.pull(serial, currentRemotePath, destPath);
 
-          // Parse adb pull output to count files
-          // Output format: "X files pulled, Y skipped. X MB/s (Y bytes in Zs)"
-          const pullMatch = result.stdout.match(/(\d+) files? pulled/);
-          const fileCount = pullMatch ? parseInt(pullMatch[1], 10) : 0;
-          totalPulled += fileCount;
+          // Parse adb pull summary:
+          // "X files pulled, Y skipped. X MB/s (Z bytes in N.NNs)"
+          const pullMatch  = result.stdout.match(/(\d+) files? pulled/);
+          const bytesMatch = result.stdout.match(/\((\d+)\s*bytes?\s+in/i);
+          const speedMatch = result.stdout.match(/([\d.]+)\s*MB\/s/i);
+          const kbMatch    = result.stdout.match(/([\d.]+)\s*KB\/s/i);
 
-          sendProgress(
-            `[${i + 1}/${pullPaths.length}] Pulled ${fileCount} file(s) from ${currentRemotePath}`
-          );
+          const fileCount = pullMatch  ? parseInt(pullMatch[1], 10)  : 0;
+          const bytes     = bytesMatch ? parseInt(bytesMatch[1], 10) : 0;
+          let   speed: number | undefined;
+          if (speedMatch)     speed = parseFloat(speedMatch[1]) * 1024 * 1024;
+          else if (kbMatch)   speed = parseFloat(kbMatch[1]) * 1024;
+
+          totalPulled += fileCount;
+          totalBytes  += bytes;
+
+          const doneMsg = `[${i + 1}/${pullPaths.length}] Pulled ${fileCount.toLocaleString()} file(s) from ${currentRemotePath}`;
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(IPC_CHANNELS.BULK_COPY_PROGRESS, {
+              type: 'status', data: doneMsg, timestamp: Date.now(),
+              percent: Math.round(((i + 1) / pullPaths.length) * 100),
+              message: doneMsg,
+              bytes: totalBytes,
+              speed,
+              filesCount: totalPulled,
+            } as ProcessProgress);
+          }
         } catch (err) {
           totalFailed++;
           sendProgress(
@@ -79,10 +112,17 @@ export function registerCopyAllHandlers(): void {
       }
 
       const durationMs = Date.now() - startTime;
-
-      sendProgress(
-        `Bulk copy complete. ${totalPulled} file(s) pulled in ${Math.round(durationMs / 1000)}s.`
-      );
+      const overallSpeed = durationMs > 0 ? Math.round(totalBytes / (durationMs / 1000)) : 0;
+      const summaryMsg = `Bulk copy complete — ${totalPulled.toLocaleString()} files, ${totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) + ' MB' : ''} in ${Math.round(durationMs / 1000)}s`;
+      if (win && !win.isDestroyed()) {
+        win.webContents.send(IPC_CHANNELS.BULK_COPY_PROGRESS, {
+          type: 'status', data: summaryMsg, timestamp: Date.now(),
+          percent: 100, message: summaryMsg,
+          bytes: totalBytes, totalBytes,
+          speed: overallSpeed > 0 ? overallSpeed : undefined,
+          filesCount: totalPulled,
+        } as ProcessProgress);
+      }
 
       return {
         success: true,

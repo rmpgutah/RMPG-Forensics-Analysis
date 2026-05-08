@@ -9,7 +9,7 @@ import {
   Download,
   Loader2,
   Search,
-  Map,
+  Map as MapIcon,
   Calendar,
   FileDown,
   Clock,
@@ -21,7 +21,9 @@ import {
   Eye,
 } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
-import { PageHeader } from '../components/common';
+import { PageHeader, IosDeviceBar, MapPreview } from '../components/common';
+import type { MapPoint } from '../components/common';
+import { fmtDate, fmtTime, fmtDateTime } from '../utils/formatDate';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -80,13 +82,6 @@ export const IosLocationHistory: React.FC = () => {
   const [timelineValue, setTimelineValue] = useState(100); // percent of timeline
   const [selectedLocation, setSelectedLocation] = useState<LocationRecord | null>(null);
   const pageSize = 50;
-
-  const handleBrowseBackup = async () => {
-    try {
-      const result = await window.api.invoke(IPC_CHANNELS.DIALOG_OPEN_FOLDER, { title: 'Select iOS Backup Folder' });
-      if (result) setBackupPath(result as string);
-    } catch { /* cancelled */ }
-  };
 
   const handleExtract = async () => {
     if (!backupPath) return;
@@ -221,18 +216,18 @@ export const IosLocationHistory: React.FC = () => {
 
       {/* Source */}
       <div className="card p-4" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>iOS Backup Source</label>
-            <div className="flex gap-2">
-              <input type="text" value={backupPath} readOnly placeholder="Select iOS backup folder..." className="input-field flex-1" style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }} />
-              <button onClick={handleBrowseBackup} className="btn-secondary" disabled={loading}>Browse</button>
-            </div>
+        <div className="space-y-3">
+          <IosDeviceBar
+            backupPath={backupPath}
+            onBackupPath={setBackupPath}
+            disabled={loading}
+          />
+          <div className="flex justify-end">
+            <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
+              {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              {loading ? 'Extracting...' : 'Extract Location Data'}
+            </button>
           </div>
-          <button onClick={handleExtract} className="btn-primary" disabled={!backupPath || loading}>
-            {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : <MapPin size={16} className="mr-2" />}
-            {loading ? 'Extracting...' : 'Extract Location Data'}
-          </button>
         </div>
       </div>
 
@@ -329,31 +324,30 @@ export const IosLocationHistory: React.FC = () => {
         </div>
       )}
 
-      {/* Map / Heatmap View */}
-      {(viewMode === 'map' || viewMode === 'heatmap') && filteredLocations.length > 0 && (
-        <div className="card p-6" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', minHeight: '400px' }}>
-          <div className="text-center">
-            <Map size={64} className="mx-auto mb-4 text-cyan-400" />
-            <h3 className="text-lg font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-              {viewMode === 'heatmap' ? 'Location Heatmap' : 'Location Map'}
-            </h3>
-            <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-              {filteredLocations.length.toLocaleString()} location points ready for visualization
-            </p>
-            <div className="max-w-lg mx-auto space-y-2">
-              {filteredLocations.slice(0, 8).map((loc) => (
-                <div key={loc.id} className="flex items-center justify-between p-2 rounded text-sm" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-                  <div className="flex items-center gap-2">
-                    {getSourceIcon(loc.source)}
-                    <span style={{ color: 'var(--text-primary)' }}>{loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}</span>
-                  </div>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(loc.timestamp).toLocaleDateString()}</span>
-                </div>
-              ))}
+      {/* Map / Heatmap View — real Leaflet preview replacing the legacy
+          placeholder. Heatmap mode reuses the same component for now (a
+          dedicated heat layer would need leaflet.heat); clusters already
+          give a heat-like density signal at low zoom levels. */}
+      {(viewMode === 'map' || viewMode === 'heatmap') && filteredLocations.length > 0 && (() => {
+        const mapPoints: MapPoint[] = filteredLocations.map((loc) => ({
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          label: loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`,
+          timestamp: loc.timestamp,
+          source: loc.source,
+        }));
+        return (
+          <div className="card p-3" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+            <div className="mb-2 flex items-center justify-between text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <span>{filteredLocations.length.toLocaleString()} location points</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {viewMode === 'heatmap' ? 'Clusters approximate visit density' : 'Click a pin for details'}
+              </span>
             </div>
+            <MapPreview points={mapPoints} height={520} />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* List View */}
       {viewMode === 'list' && paginatedLocations.length > 0 && (
@@ -393,8 +387,8 @@ export const IosLocationHistory: React.FC = () => {
                       {loc.latitude.toFixed(5)}, {loc.longitude.toFixed(5)}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(loc.timestamp).toLocaleDateString()}{' '}
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(loc.timestamp).toLocaleTimeString()}</span>
+                      {fmtDate(loc.timestamp)}{' '}
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtTime(loc.timestamp)}</span>
                     </td>
                     <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
                       {loc.duration > 0 ? formatDuration(loc.duration) : '—'}
@@ -436,7 +430,7 @@ export const IosLocationHistory: React.FC = () => {
                 { label: 'Coordinates', value: `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}` },
                 { label: 'Altitude', value: selectedLocation.altitude ? `${selectedLocation.altitude.toFixed(1)}m` : 'N/A' },
                 { label: 'Accuracy', value: `±${selectedLocation.accuracy}m` },
-                { label: 'Timestamp', value: new Date(selectedLocation.timestamp).toLocaleString() },
+                { label: 'Timestamp', value: fmtDateTime(selectedLocation.timestamp) },
                 { label: 'Duration', value: selectedLocation.duration > 0 ? formatDuration(selectedLocation.duration) : 'N/A' },
                 { label: 'Confidence', value: `${selectedLocation.confidence}%` },
                 ...(selectedLocation.ssid ? [{ label: 'WiFi SSID', value: selectedLocation.ssid }] : []),

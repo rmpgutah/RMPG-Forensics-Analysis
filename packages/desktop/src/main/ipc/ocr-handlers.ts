@@ -35,7 +35,7 @@ export function registerOcrHandlers(): void {
       if (inputPaths.length === 0) {
         throw new Error('No input file specified');
       }
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -77,7 +77,16 @@ export function registerOcrHandlers(): void {
 
         try {
           // Run tesseract: tesseract <input> <output_base> -l <lang> --psm <psm>
-          // Tesseract automatically appends .txt to the output base path
+          //
+          // Layout preservation:
+          // - `--psm 3` (default) does full page auto-segmentation, which keeps
+          //   paragraphs, line breaks and column flow.
+          // - `-c preserve_interword_spaces=1` tells Tesseract to keep the
+          //   actual spacing between words instead of collapsing runs of
+          //   whitespace, which is what makes columnar / table-shaped text
+          //   readable in the viewer.
+          //
+          // Tesseract automatically appends .txt to the output base path.
           const result = await runCommandWithProgress(
             tesseractTool.path,
             [
@@ -85,6 +94,7 @@ export function registerOcrHandlers(): void {
               outputBase,
               '-l', language,
               '--psm', String(psm),
+              '-c', 'preserve_interword_spaces=1',
             ],
             {},
             (p) => {
@@ -104,10 +114,15 @@ export function registerOcrHandlers(): void {
               text = '';
             }
 
+            // Strip only trailing CR/LF noise; keep internal whitespace and
+            // leading indents intact so the document layout is preserved when
+            // displayed in the viewer.
+            const normalised = text.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n+$/, '');
+
             results.push({
               inputPath,
               outputPath: txtPath,
-              text: text.trim(),
+              text: normalised,
               success: true,
             });
           } else {
@@ -135,7 +150,24 @@ export function registerOcrHandlers(): void {
         `OCR complete. ${successCount}/${inputPaths.length} files processed successfully.`
       );
 
+      // Concatenate text across all inputs into a single top-level field so
+      // single-file callers (the OCR Processing page binds `result.text`
+      // directly to its textarea) get readable output without traversing
+      // `results[]`. Multi-file callers still have `results` for per-file
+      // breakdown.
+      // Concatenate raw text — no per-page trimming, so original indentation
+      // and blank-line groupings make it through to the viewer.
+      const combinedText = results
+        .filter((r) => r.success && r.text)
+        .map((r) =>
+          inputPaths.length > 1
+            ? `--- ${path.basename(r.inputPath)} ---\n${r.text}`
+            : r.text
+        )
+        .join('\n\n');
+
       return {
+        text: combinedText,
         results,
         totalFiles: inputPaths.length,
         successCount,

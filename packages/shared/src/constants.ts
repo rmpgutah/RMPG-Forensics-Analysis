@@ -1,5 +1,8 @@
 export const APP_NAME = 'RMPG Forensics Analysis';
-export const APP_VERSION = '1.0.0';
+// Version is injected by Vite (define plugin) from desktop/package.json at build time.
+// Falls back to a literal for unit-test environments where the define is absent.
+export const APP_VERSION: string =
+  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.43';
 export const APP_AUTHOR = 'RMPG';
 
 export const IPC_CHANNELS = {
@@ -11,6 +14,11 @@ export const IPC_CHANNELS = {
   CASE_EXPORT: 'case:export',
   CASE_IMPORT: 'case:import',
   CASE_SET_PATH: 'case:set-path',
+  CASE_SAVE_NOTES: 'case:save-notes',
+  CASE_EXPORT_PDF: 'case:export-pdf',
+
+  // Error reporting (main -> renderer push)
+  ERROR_REPORT: 'error:report',
 
   // Dialog
   DIALOG_OPEN_FOLDER: 'dialog:open-folder',
@@ -48,7 +56,9 @@ export const IPC_CHANNELS = {
   WHATSAPP_LIST_PACKAGES: 'whatsapp:list-packages',
   WHATSAPP_BROWSE_CONTACTS: 'whatsapp:browse-contacts',
   WHATSAPP_DECRYPT: 'whatsapp:decrypt',
+  WHATSAPP_DECRYPT_PROGRESS: 'whatsapp:decrypt-progress',
   WHATSAPP_DECRYPT_MEDIA: 'whatsapp:decrypt-media',
+  WHATSAPP_DECRYPT_MEDIA_PROGRESS: 'whatsapp:decrypt-media-progress',
   WHATSAPP_PARSE_DB: 'whatsapp:parse-db',
   WHATSAPP_PARSE_LEGACY_DB: 'whatsapp:parse-legacy-db',
   WHATSAPP_GENERATE_REPORT: 'whatsapp:generate-report',
@@ -59,6 +69,7 @@ export const IPC_CHANNELS = {
 
   // iOS
   IOS_LIST_DEVICES: 'ios:list-devices',
+  IOS_FIND_BACKUP_PATH: 'ios:find-backup-path',
   IOS_BACKUP: 'ios:backup',
   IOS_BACKUP_PROGRESS: 'ios:backup-progress',
   IOS_GET_INFO: 'ios:get-info',
@@ -81,6 +92,22 @@ export const IPC_CHANNELS = {
   IOS_LOCATION_EXTRACT_PROGRESS: 'ios:location-extract-progress',
   IOS_DELETED_RECOVER: 'ios:deleted-recover',
   IOS_DELETED_RECOVER_PROGRESS: 'ios:deleted-recover-progress',
+  IOS_SAFARI_EXTRACT: 'ios:safari-extract',
+  IOS_SAFARI_EXTRACT_PROGRESS: 'ios:safari-extract-progress',
+  IOS_NOTES_EXTRACT: 'ios:notes-extract',
+  IOS_NOTES_EXTRACT_PROGRESS: 'ios:notes-extract-progress',
+  IOS_VOICEMAIL_EXTRACT: 'ios:voicemail-extract',
+  IOS_VOICEMAIL_EXTRACT_PROGRESS: 'ios:voicemail-extract-progress',
+  IOS_HEALTH_EXTRACT: 'ios:health-extract',
+  IOS_HEALTH_EXTRACT_PROGRESS: 'ios:health-extract-progress',
+  IOS_SCREENTIME_EXTRACT: 'ios:screentime-extract',
+  IOS_SCREENTIME_EXTRACT_PROGRESS: 'ios:screentime-extract-progress',
+  IOS_INTELLIGENCE_TIMELINE: 'ios:intelligence-timeline',
+  IOS_INTELLIGENCE_TIMELINE_PROGRESS: 'ios:intelligence-timeline-progress',
+  IOS_LOCATION_ACCESS: 'ios:location-access',
+  IOS_LOCATION_ACCESS_PROGRESS: 'ios:location-access-progress',
+  IOS_NETWORK_TRACE: 'ios:network-trace',
+  IOS_NETWORK_TRACE_PROGRESS: 'ios:network-trace-progress',
 
   // IPED
   IPED_RUN: 'iped:run',
@@ -101,6 +128,8 @@ export const IPC_CHANNELS = {
   // Instagram
   INSTAGRAM_SCRAPE: 'instagram:scrape',
   INSTAGRAM_PROGRESS: 'instagram:progress',
+  INSTAGRAM_2FA_PROMPT: 'instagram:2fa-prompt',
+  INSTAGRAM_2FA_SUBMIT: 'instagram:2fa-submit',
 
   // Special Dump
   DUMP_LIST_SERVICES: 'dump:list-services',
@@ -113,6 +142,37 @@ export const IPC_CHANNELS = {
   // Samsung Unlock
   SAMSUNG_DETECT_PORT: 'samsung:detect-port',
   SAMSUNG_UNLOCK: 'samsung:unlock',
+
+  // Breach & Bypass — Android lock-screen credential recovery (pure offline)
+  LOCKSCREEN_RECOVER: 'breach:lockscreen-recover',
+  LOCKSCREEN_RECOVER_PROGRESS: 'breach:lockscreen-recover:progress',
+
+  // Breach & Bypass — Qualcomm EDL Mode imager (wraps edl.py)
+  EDL_IMAGE: 'breach:edl-image',
+  EDL_IMAGE_PROGRESS: 'breach:edl-image:progress',
+
+  // Breach & Bypass — MediaTek BROM exploit (wraps mtkclient)
+  MTK_DUMP: 'breach:mtk-dump',
+  MTK_DUMP_PROGRESS: 'breach:mtk-dump:progress',
+
+  // Breach & Bypass — iOS encrypted backup decryptor + keychain extractor
+  IOS_BACKUP_DECRYPT: 'breach:ios-backup-decrypt',
+  IOS_BACKUP_DECRYPT_PROGRESS: 'breach:ios-backup-decrypt:progress',
+  IOS_KEYCHAIN_EXTRACT: 'breach:ios-keychain-extract',
+
+  // Forensic correctness — chain-of-custody viewer
+  COC_LIST: 'coc:list',
+  COC_EXPORT_PDF: 'coc:export-pdf',
+
+  // Forensic correctness — write-blocker policy notification
+  WRITE_BLOCKER_SET: 'write-blocker:set',
+  WRITE_BLOCKER_GET: 'write-blocker:get',
+
+  // Hash database matcher (NSRL / Project VIC / custom SQLite)
+  HASH_DB_OPEN: 'hash-db:open',
+  HASH_DB_LOOKUP: 'hash-db:lookup',
+  HASH_DB_SCAN_DIR: 'hash-db:scan-dir',
+  HASH_DB_SCAN_DIR_PROGRESS: 'hash-db:scan-dir:progress',
 
   // AB to TAR
   AB_CONVERT: 'ab:convert',
@@ -145,6 +205,8 @@ export const IPC_CHANNELS = {
   // Tools
   TOOLS_CHECK: 'tools:check',
   TOOLS_CONFIGURE: 'tools:configure',
+  TOOLS_INSTALL: 'tools:install',
+  TOOLS_INSTALL_PROGRESS: 'tools:install-progress',
 
   // Auth / 2FA
   AUTH_CHECK_STATUS: 'auth:check-status',
@@ -217,9 +279,13 @@ export const IPC_CHANNELS = {
   // WhatsApp Merge
   WHATSAPP_MERGE: 'whatsapp:merge',
 
-  // iOS Backup Decrypt
-  IOS_BACKUP_DECRYPT: 'ios:backup-decrypt',
-  IOS_BACKUP_DECRYPT_PROGRESS: 'ios:backup-decrypt-progress',
+  // File system helpers
+  FILE_WRITE: 'fs:write-file',
+
+  // Auth extras
+  AUTH_TRUST_DEVICE: 'auth:trust-device',
+
+  // (IOS_BACKUP_DECRYPT defined above under Breach & Bypass)
 
   // Lock Screen Recovery
   LOCK_SCREEN_RECOVER: 'lock-screen:recover',
@@ -304,6 +370,68 @@ export const IPC_CHANNELS = {
   // App
   APP_GET_PLATFORM: 'app:get-platform',
   APP_GET_VERSION: 'app:get-version',
+
+  // Auto-scan on device connection
+  DEVICE_AUTO_SCAN: 'device:auto-scan',
+
+  // AI Forensic Agent
+  AI_AGENT_QUERY: 'ai:agent-query',
+  AI_AGENT_STREAM: 'ai:agent-stream',
+
+  // Deep iOS extraction — high-value artefacts beyond the standard set:
+  // app usage timeline (knowledgeC), calendar, reminders, wallet passes,
+  // cellular data usage, bluetooth pairing history.
+  IOS_APP_USAGE_EXTRACT: 'ios:app-usage-extract',
+  IOS_CALENDAR_EXTRACT: 'ios:calendar-extract',
+  IOS_REMINDERS_EXTRACT: 'ios:reminders-extract',
+  IOS_WALLET_EXTRACT: 'ios:wallet-extract',
+  IOS_CELLULAR_USAGE_EXTRACT: 'ios:cellular-usage-extract',
+  IOS_BLUETOOTH_EXTRACT: 'ios:bluetooth-extract',
+  // Round 2 deep extractors — high-value forensic artefacts.
+  IOS_WHATSAPP_EXTRACT: 'ios:whatsapp-extract',
+  IOS_MESSAGE_ATTACHMENTS_EXTRACT: 'ios:message-attachments-extract',
+  IOS_APP_INSTALLS_EXTRACT: 'ios:app-installs-extract',
+  IOS_KEYBOARD_CACHE_EXTRACT: 'ios:keyboard-cache-extract',
+  IOS_AIRDROP_EXTRACT: 'ios:airdrop-extract',
+  // Generic registry-driven artefact puller — list & pull any of 20+
+  // forensic-relevant files from an iOS backup by id.
+  IOS_ARTEFACT_LIST: 'ios:artefact-list',
+  IOS_ARTEFACT_PULL: 'ios:artefact-pull',
+  // Live iOS — read directly from a connected device, no backup needed.
+  // Limited by Apple's sandbox; useful for triage/quick-look.
+  IOS_LIVE_INFO: 'ios:live-info',
+  IOS_LIVE_DIAGNOSTICS: 'ios:live-diagnostics',
+  IOS_LIVE_CRASH_REPORTS: 'ios:live-crash-reports',
+  IOS_LIVE_INSTALLED_APPS: 'ios:live-installed-apps',
+  IOS_LIVE_SYSLOG: 'ios:live-syslog',
+
+  // Acquisition report — synthesise a single HTML + Markdown report from
+  // an acquisition folder's MANIFEST.json + structured artefact JSONs.
+  ACQUISITION_REPORT_BUILD: 'acquisition:report-build',
+
+  // Forensic decryption — local-evidence only. Each channel operates on
+  // files already on the examiner's disk (acquired backups, forensic
+  // copies under their authorisation). No online attacks.
+  DECRYPT_IOS_BACKUP_TRY: 'decrypt:ios-backup-try',
+  DECRYPT_IOS_BACKUP_DICT: 'decrypt:ios-backup-dict',
+  DECRYPT_IOS_BACKUP_DICT_PROGRESS: 'decrypt:ios-backup-dict-progress',
+  DECRYPT_ZIP_TRY: 'decrypt:zip-try',
+  DECRYPT_ZIP_DICT: 'decrypt:zip-dict',
+  DECRYPT_ZIP_DICT_PROGRESS: 'decrypt:zip-dict-progress',
+  DECRYPT_ANDROID_GESTURE: 'decrypt:android-gesture',
+  DECRYPT_ANDROID_PIN: 'decrypt:android-pin',
+  // Incremental brute force — iterate every candidate over a charset
+  // (digits / letters / alphanumeric / printable) up to a max length.
+  // Target is one of 'ios-backup' | 'zip' (extensible later).
+  DECRYPT_BRUTE_FORCE: 'decrypt:brute-force',
+  DECRYPT_BRUTE_FORCE_PROGRESS: 'decrypt:brute-force-progress',
+  // Estimate the search-space size for a charset+range without running.
+  // Powers the UI's "X.YT candidates — infeasible on CPU" warning.
+  DECRYPT_BRUTE_FORCE_ESTIMATE: 'decrypt:brute-force-estimate',
+  // Live-device lockscreen extraction: pull /data/system/ artefacts via
+  // ADB then crack offline. Requires root or recovery-mode access; no
+  // bypass of on-device rate limiters.
+  DECRYPT_LIVE_ANDROID: 'decrypt:live-android',
 } as const;
 
 export const HASH_ALGORITHMS = ['md5', 'sha1', 'sha256', 'sha384', 'sha512'] as const;

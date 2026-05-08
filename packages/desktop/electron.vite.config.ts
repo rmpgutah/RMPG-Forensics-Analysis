@@ -1,9 +1,14 @@
 import { resolve } from 'path';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'));
+const APP_VERSION_DEFINE = { __APP_VERSION__: JSON.stringify(pkg.version) };
 
 export default defineConfig({
   main: {
+    define: APP_VERSION_DEFINE,
     plugins: [externalizeDepsPlugin({
       exclude: ['@rmpg/shared', 'firebase'],
     })],
@@ -15,6 +20,7 @@ export default defineConfig({
     },
   },
   preload: {
+    define: APP_VERSION_DEFINE,
     plugins: [externalizeDepsPlugin({
       exclude: ['@rmpg/shared'],
     })],
@@ -25,6 +31,7 @@ export default defineConfig({
     },
   },
   renderer: {
+    define: APP_VERSION_DEFINE,
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer'),

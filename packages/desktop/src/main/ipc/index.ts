@@ -25,9 +25,13 @@ import { registerToolsHandlers } from './tools-handlers';
 import { registerSyncHandlers } from './sync-handlers';
 import { registerAuthHandlers } from './auth-handlers';
 import { registerMissingHandlers } from './missing-handlers';
+import { registerAutoScanHandlers } from './auto-scan-handlers';
+import { registerAiAgentHandlers } from './ai-agent-handlers';
 import { registerTacticalHandlers } from './tactical-handlers';
 import { registerPythonToolkitHandlers } from './python-toolkit-handlers';
 import { registerDownloadHandlers } from './download-handlers';
+import { registerDecryptionHandlers } from './decryption-handlers';
+import { registerBreachHandlers } from './breach-handlers';
 
 /**
  * Register all IPC handlers for the main process.
@@ -111,6 +115,12 @@ export function registerAllIpcHandlers(): void {
   // Authentication & 2FA
   registerAuthHandlers();
 
+  // Auto-scan on device connection
+  registerAutoScanHandlers();
+
+  // AI Forensic Agent
+  registerAiAgentHandlers();
+
   // Advanced tactical systems (decrypt, brute force, breach, spy, compliance, live view)
   registerTacticalHandlers();
 
@@ -119,6 +129,12 @@ export function registerAllIpcHandlers(): void {
 
   // App downloads management
   registerDownloadHandlers();
+
+  // Forensic decryption (local-evidence only)
+  registerDecryptionHandlers();
+
+  // Breach & Bypass (lock-screen recovery, EDL/MTK imaging, iOS backup decrypt)
+  registerBreachHandlers();
 
   // Stub handlers for features not yet fully implemented
   registerMissingHandlers();

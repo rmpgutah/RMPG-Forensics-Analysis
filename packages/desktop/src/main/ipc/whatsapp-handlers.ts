@@ -58,7 +58,7 @@ export function registerWhatsAppHandlers(): void {
     IPC_CHANNELS.WHATSAPP_EXTRACT,
     async (_event, options: WhatsAppExtractOptions) => {
       const { serial, casePath, packageName, legacyApkPath } = options;
-      const win = BrowserWindow.getFocusedWindow();
+      const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
         const progress: ProcessProgress = {
@@ -112,23 +112,28 @@ export function registerWhatsAppHandlers(): void {
             return adbService.uninstall(serial, packageName);
           });
 
-          // Install the legacy APK
-          await adbService.install(serial, legacyApkPath);
-          sendProgress('Legacy APK installed. Creating downgraded backup...');
+          // Install the legacy APK — always restore original even if install/backup fails
+          try {
+            await adbService.install(serial, legacyApkPath);
+            sendProgress('Legacy APK installed. Creating downgraded backup...');
 
-          // Backup again with the legacy version
-          const legacyBackupPath = path.join(tempDir, 'whatsapp_legacy_backup.ab');
-          await adbService.backup(serial, legacyBackupPath, { packages: [packageName] }, (p) => {
-            if (win && !win.isDestroyed()) {
-              win.webContents.send(IPC_CHANNELS.WHATSAPP_EXTRACT_PROGRESS, p);
-            }
-          });
-
-          // Step 5: Restore the original APK
-          sendProgress('Restoring original WhatsApp version...');
-          await adbService.uninstall(serial, packageName).catch(() => {});
-          await adbService.install(serial, originalApkPath);
-          sendProgress('Original WhatsApp version restored.');
+            const legacyBackupPath = path.join(tempDir, 'whatsapp_legacy_backup.ab');
+            await adbService.backup(serial, legacyBackupPath, { packages: [packageName] }, (p) => {
+              if (win && !win.isDestroyed()) {
+                win.webContents.send(IPC_CHANNELS.WHATSAPP_EXTRACT_PROGRESS, p);
+              }
+            });
+          } catch (installErr) {
+            sendProgress(`Warning: Legacy APK step failed: ${(installErr as Error).message}`);
+          } finally {
+            // Step 5: Always restore the original APK
+            sendProgress('Restoring original WhatsApp version...');
+            await adbService.uninstall(serial, packageName).catch(() => {});
+            await adbService.install(serial, originalApkPath).catch((e: Error) => {
+              sendProgress(`Warning: Could not restore original APK: ${e.message}`);
+            });
+            sendProgress('Original WhatsApp version restored.');
+          }
         }
 
         // Step 6: Convert AB backup to TAR and extract databases
@@ -141,11 +146,10 @@ export function registerWhatsAppHandlers(): void {
 
           try {
             await runCommand(javaTool.path, ['-jar', abeJarPath, 'unpack', backupPath, tarPath]);
-            // Extract tar contents
             await runCommand('tar', ['-xf', tarPath, '-C', tempDir]);
             sendProgress('Backup extracted successfully.');
-          } catch {
-            sendProgress('Warning: Could not convert AB backup. Manual extraction may be required.');
+          } catch (extractErr) {
+            sendProgress(`Warning: Could not convert AB backup — ${(extractErr as Error).message}. Database extraction may be incomplete.`);
           }
         }
 

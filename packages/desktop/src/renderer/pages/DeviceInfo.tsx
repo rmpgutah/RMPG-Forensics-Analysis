@@ -94,10 +94,17 @@ export const DeviceInfo: React.FC = () => {
       if (savePath) {
         const lines = TABS.map((t) => {
           const val = data[t.key];
-          const content = Array.isArray(val) ? val.join('\n') : String(val ?? 'Not fetched');
+          // Use a JSON-friendly representation for objects, simple toString
+          // for primitives — same intent as the on-screen renderer but
+          // serialised for plain-text export.
+          let content: string;
+          if (val == null) content = 'Not fetched';
+          else if (Array.isArray(val)) content = val.map((v) => typeof v === 'object' ? JSON.stringify(v) : String(v)).join('\n');
+          else if (typeof val === 'object') content = JSON.stringify(val, null, 2);
+          else content = String(val);
           return `=== ${t.label} ===\n${content}`;
         }).join('\n\n');
-        await window.api.invoke('fs:write-file', savePath, lines);
+        await window.api.invoke(IPC_CHANNELS.FILE_WRITE, savePath, lines);
       }
     } catch {
       // Export cancelled or failed
@@ -127,7 +134,7 @@ export const DeviceInfo: React.FC = () => {
           <button
             onClick={handleExtractAll}
             disabled={!selectedDevice}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="btn-primary flex w-full items-center justify-center gap-2 text-sm"
           >
             <Download size={14} />
             Extract All
@@ -136,7 +143,7 @@ export const DeviceInfo: React.FC = () => {
           <button
             onClick={handleExport}
             disabled={!selectedDevice}
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            className="btn-secondary flex w-full items-center justify-center gap-2 text-sm"
           >
             Export to Text
           </button>
@@ -144,16 +151,18 @@ export const DeviceInfo: React.FC = () => {
 
         <div className="flex-1">
           {/* Tabs */}
-          <div className="mb-4 flex flex-wrap gap-1 rounded-lg border border-slate-700 bg-slate-800/50 p-1">
+          <div className="mb-4 flex flex-wrap gap-1 rounded-lg border p-1"
+            style={{ borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}>
             {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   activeTab === tab.key
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                    ? 'bg-[#6495ED] text-white'
+                    : 'hover:bg-[var(--bg-hover)]'
                 }`}
+                style={activeTab === tab.key ? {} : { color: 'var(--text-secondary)' }}
               >
                 {tab.icon}
                 {tab.label}
@@ -162,38 +171,43 @@ export const DeviceInfo: React.FC = () => {
           </div>
 
           {/* Content */}
-          <div className="min-h-[400px] rounded-lg border border-slate-700 bg-slate-950 p-4">
+          <div className="card min-h-[400px]">
             {!selectedDevice ? (
-              <p className="text-sm text-slate-500">Select a device to view properties.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Select a device to view properties.</p>
             ) : loading[activeTab] ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                 <Loader2 size={14} className="animate-spin" />
-                Fetching {activeTab} data...
+                Fetching {activeTab} data…
               </div>
             ) : error ? (
               <p className="text-sm text-red-400">{error}</p>
             ) : currentData === undefined ? (
-              <p className="text-sm text-slate-500">
-                Click on a tab or use &quot;Extract All&quot; to fetch data.
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Click a tab or use &quot;Extract All&quot; to fetch data.
               </p>
             ) : activeTab === 'packages' ? (
               <div className="space-y-1">
-                <p className="mb-2 text-xs text-slate-500">
+                <p className="mb-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   {Array.isArray(currentData) ? currentData.length : 0} packages found
                 </p>
                 <div className="max-h-[350px] overflow-y-auto font-mono text-xs">
                   {Array.isArray(currentData) &&
                     currentData.map((pkg, i) => (
-                      <div key={i} className="text-slate-300 py-0.5">
+                      <div key={i} className="py-0.5" style={{ color: 'var(--text-primary)' }}>
                         {pkg}
                       </div>
                     ))}
                 </div>
               </div>
             ) : (
-              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-300">
-                {String(currentData)}
-              </pre>
+              // Generic renderer (see helper below): pretty-prints objects
+              // as key/value rows, arrays as tables, primitives as text.
+              // Replaces the previous String(currentData) which produced
+              // "[object Object]" for every non-string handler return.
+              <div className="max-h-[400px] overflow-auto font-mono text-xs"
+                style={{ color: 'var(--text-primary)' }}>
+                {renderDeviceData(currentData)}
+              </div>
             )}
           </div>
         </div>
@@ -201,3 +215,93 @@ export const DeviceInfo: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * Pretty-print arbitrary handler return values (objects, arrays of
+ * objects, arrays of primitives, scalars, null) as readable HTML. The
+ * old `String(value)` rendered "[object Object]" for every non-string,
+ * which is what the user reported across General/IMEI/Location/WiFi tabs.
+ *
+ * Layout choices:
+ * - null/undefined → "—" muted, never blank (silent emptiness reads as
+ *   "still loading" to users)
+ * - primitive → just text
+ * - array of primitives → bullet list
+ * - array of objects → 2-column table (uses union-of-keys for stable cols)
+ * - plain object → 2-column key/value grid (left col aligned, monospaced
+ *   key, value gets word-break so long URLs don't blow the layout)
+ */
+function renderDeviceData(value: unknown): React.ReactNode {
+  if (value === null || value === undefined) {
+    return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  }
+  if (typeof value !== 'object') {
+    return <pre className="whitespace-pre-wrap">{String(value)}</pre>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span style={{ color: 'var(--text-muted)' }}>(empty)</span>;
+    }
+    const allPrimitive = value.every((v) => typeof v !== 'object' || v === null);
+    if (allPrimitive) {
+      return (
+        <ul className="space-y-0.5">
+          {value.map((v, i) => (
+            <li key={i} className="truncate">{String(v)}</li>
+          ))}
+        </ul>
+      );
+    }
+    // Array of objects → table
+    const cols = Array.from(value.reduce<Set<string>>((acc, row) => {
+      if (row && typeof row === 'object') for (const k of Object.keys(row)) acc.add(k);
+      return acc;
+    }, new Set<string>()));
+    return (
+      <div className="overflow-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              {cols.map((c) => (<th key={c} className="px-2 py-1 border-b border-[var(--border-color)]">{c}</th>))}
+            </tr>
+          </thead>
+          <tbody>
+            {value.map((row, i) => (
+              <tr key={i} className="border-b border-[var(--border-color)]/50">
+                {cols.map((c) => {
+                  const cell = (row as Record<string, unknown>)?.[c];
+                  return (
+                    <td key={c} className="px-2 py-1 align-top break-all">
+                      {cell == null ? <span style={{ color: 'var(--text-muted)' }}>—</span> : String(cell)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  // Plain object → key/value grid
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) {
+    return <span style={{ color: 'var(--text-muted)' }}>(no data)</span>;
+  }
+  return (
+    <div className="grid grid-cols-[max-content,1fr] gap-x-3 gap-y-1">
+      {entries.map(([k, v]) => (
+        <React.Fragment key={k}>
+          <div className="text-right pr-2 font-medium" style={{ color: 'var(--text-muted)' }}>{k}</div>
+          <div className="break-all">
+            {v === null || v === undefined
+              ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+              : typeof v === 'object'
+                ? <pre className="whitespace-pre-wrap">{JSON.stringify(v, null, 2)}</pre>
+                : String(v)}
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
