@@ -239,11 +239,11 @@ function registerToolkitRunHandler(): void {
         return { success: false, error: `Unknown tool: ${toolId}` };
       }
 
-      // Input validation: reject shell metacharacters in target
+      // Input validation: reject shell metacharacters in target (allow - . : / @ for URLs/domains)
       if (/[;&|`$(){}!#*<>\\\n\r]/.test(target)) {
         return { success: false, error: 'Target contains invalid characters' };
       }
-      // Validate extraArgs: reject anything that looks like shell injection
+      // Validate extraArgs: reject shell injection but allow common flag characters
       for (const arg of extraArgs) {
         if (/[;&|`$(){}!#*<>\\\n\r]/.test(arg)) {
           return { success: false, error: 'Extra arguments contain invalid characters' };
@@ -554,6 +554,270 @@ print(f'Generated {{len(results)}} Google dorks for: {{target}}')
 }
 
 // ---------------------------------------------------------------------------
+// Dedicated OSINT Tool Handlers
+// ---------------------------------------------------------------------------
+// These handlers wire the individual page-level IPC channels (e.g.
+// SHERLOCK_RUN, MAIGRET_RUN) to the existing PYTHON_TOOLS registry so that
+// each dedicated page works without routing through the generic toolkit.
+
+function registerOsintToolHandlers(): void {
+  // -----------------------------------------------------------------------
+  // SHERLOCK_RUN – username hunt across 400+ social networks
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.SHERLOCK_RUN,
+    async (_event, options: { username: string; outputPath: string }) => {
+      const { username, outputPath } = options;
+      const progressCh = IPC_CHANNELS.SHERLOCK_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting Sherlock search for: ${username}`);
+
+      try {
+        progress(progressCh, 10, 'Running Sherlock username hunt across 400+ sites...');
+        const resultDir = path.join(outputPath, `sherlock_${Date.now()}`);
+        await ensureDir(resultDir);
+
+        const result = await runCommand(python.path, [
+          '-m', 'sherlock_project', username,
+          '--output', path.join(resultDir, 'sherlock_results.txt'),
+          '--csv',
+          '--print-found',
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Sherlock failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Sherlock', target: username,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Sherlock search complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // MAIGRET_RUN – deep username search across 2500+ sites
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.MAIGRET_RUN,
+    async (_event, options: { username: string; outputPath: string }) => {
+      const { username, outputPath } = options;
+      const progressCh = IPC_CHANNELS.MAIGRET_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting Maigret deep search for: ${username}`);
+
+      try {
+        progress(progressCh, 10, 'Running Maigret deep username search (2500+ sites)...');
+        const resultDir = path.join(outputPath, `maigret_${Date.now()}`);
+        await ensureDir(resultDir);
+
+        const result = await runCommand(python.path, [
+          '-m', 'maigret', username,
+          '--folderoutput', resultDir,
+          '--json', 'ndjson',
+          '--pdf',
+        ], { timeout: 600000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Maigret failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Maigret', target: username,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Maigret profiling complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // HOLEHE_RUN – check email registration across 120+ sites
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.HOLEHE_RUN,
+    async (_event, options: { email: string; outputPath: string }) => {
+      const { email, outputPath } = options;
+      const progressCh = IPC_CHANNELS.HOLEHE_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting Holehe email check for: ${email}`);
+
+      try {
+        progress(progressCh, 10, 'Checking email registration across 120+ sites...');
+        const resultDir = path.join(outputPath, `holehe_${Date.now()}`);
+        await ensureDir(resultDir);
+
+        const result = await runCommand(python.path, [
+          '-m', 'holehe', email, '--only-used',
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'holehe_results.txt'), result.stdout);
+
+        // Parse output to structured JSON
+        const lines = result.stdout.split('\n').filter(Boolean);
+        const found: Array<{ site: string; exists: boolean }> = [];
+        for (const line of lines) {
+          if (line.includes('[+]')) {
+            found.push({ site: line.replace(/\[\+\]\s*/, '').trim(), exists: true });
+          } else if (line.includes('[-]')) {
+            found.push({ site: line.replace(/\[-\]\s*/, '').trim(), exists: false });
+          }
+        }
+        await writeJson(path.join(resultDir, 'holehe_parsed.json'), {
+          email,
+          total_checked: found.length,
+          registered: found.filter((f) => f.exists),
+          not_registered: found.filter((f) => !f.exists),
+        });
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Holehe', target: email,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, `Holehe check complete — ${found.filter((f) => f.exists).length} site(s) found`);
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // GHUNT_RUN – Google account investigation
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.GHUNT_RUN,
+    async (_event, options: { email: string; outputPath: string }) => {
+      const { email, outputPath } = options;
+      const progressCh = IPC_CHANNELS.GHUNT_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting GHunt investigation for: ${email}`);
+
+      try {
+        progress(progressCh, 10, 'Running GHunt Google account recon...');
+        const resultDir = path.join(outputPath, `ghunt_${Date.now()}`);
+        await ensureDir(resultDir);
+
+        const result = await runCommand(python.path, [
+          '-m', 'ghunt', 'email', email,
+          '--json', path.join(resultDir, 'ghunt_results.json'),
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `GHunt failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'GHunt', target: email,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'GHunt investigation complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // SOCIAL_ANALYZER_RUN – social media profile analysis
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.SOCIAL_ANALYZER_RUN,
+    async (_event, options: { target: string; outputPath: string }) => {
+      const { target, outputPath } = options;
+      const progressCh = IPC_CHANNELS.SOCIAL_ANALYZER_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting Social Analyzer for: ${target}`);
+
+      try {
+        progress(progressCh, 10, 'Analyzing social media profiles across 1000+ platforms...');
+        const resultDir = path.join(outputPath, `social_analyzer_${Date.now()}`);
+        await ensureDir(resultDir);
+
+        const result = await runCommand(python.path, [
+          '-m', 'social-analyzer',
+          '--username', target,
+          '--metadata',
+          '--output', 'json',
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        // Try to parse JSON output
+        try {
+          const parsed = JSON.parse(result.stdout.trim());
+          await writeJson(path.join(resultDir, 'social_analyzer_results.json'), parsed);
+        } catch {
+          await fs.writeFile(path.join(resultDir, 'social_analyzer_results.txt'), result.stdout);
+        }
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Social Analyzer failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Social Analyzer', target,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Social Analyzer complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Export: Register All Python Toolkit Handlers
 // ---------------------------------------------------------------------------
 
@@ -561,4 +825,5 @@ export function registerPythonToolkitHandlers(): void {
   registerToolkitRunHandler();
   registerToolkitInstallHandler();
   registerToolkitStatusHandler();
+  registerOsintToolHandlers();
 }

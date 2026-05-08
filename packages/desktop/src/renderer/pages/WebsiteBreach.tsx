@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Globe, Play, AlertTriangle, Search, Download, CheckCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Globe, Play, AlertTriangle, Search, Download, CheckCircle, Radar } from 'lucide-react';
 import { IPC_CHANNELS } from '@rmpg/shared';
 import {
   PageHeader,
@@ -9,6 +9,15 @@ import {
   ConfirmDialog,
 } from '../components/common';
 import { useProcess } from '../hooks';
+
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
 
 const DATA_GOALS = [
   { id: 'user-accounts', label: 'User Accounts & Credentials', description: 'Usernames, emails, password hashes' },
@@ -35,8 +44,11 @@ export const WebsiteBreach: React.FC = () => {
   const [password, setPassword] = useState('');
   const [stealthMode, setStealthMode] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [scanResult, setScanResult] = useState<{ reachable?: boolean; server?: string; status?: number } | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   const selectedGoals = goals.filter((g) => g.checked);
+  const urlValid = useMemo(() => !targetUrl || isValidUrl(targetUrl), [targetUrl]);
 
   const toggleGoal = (id: string) => {
     if (id === 'everything') {
@@ -48,8 +60,22 @@ export const WebsiteBreach: React.FC = () => {
   };
 
   const handleStartClick = () => {
-    if (!targetUrl || !outputFolder || selectedGoals.length === 0) return;
+    if (!targetUrl || !outputFolder || selectedGoals.length === 0 || !urlValid) return;
     setShowConfirm(true);
+  };
+
+  const handleScanTarget = async () => {
+    if (!targetUrl || !urlValid) return;
+    setIsScanning(true);
+    setScanResult(null);
+    try {
+      const result = await window.api.invoke(IPC_CHANNELS.WEB_BREACH_SCAN, { targetUrl });
+      setScanResult(result as { reachable?: boolean; server?: string; status?: number });
+    } catch {
+      setScanResult({ reachable: false });
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleConfirmStart = async () => {
@@ -96,11 +122,43 @@ export const WebsiteBreach: React.FC = () => {
           <input
             type="text"
             value={targetUrl}
-            onChange={(e) => setTargetUrl(e.target.value)}
+            onChange={(e) => { setTargetUrl(e.target.value); setScanResult(null); }}
             placeholder="https://example.com"
             disabled={process.isRunning}
-            className="w-full rounded-md border border-slate-600 bg-slate-900 px-4 py-3 text-base text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50"
+            className={`w-full rounded-md border ${!urlValid ? 'border-red-500' : 'border-slate-600'} bg-slate-900 px-4 py-3 text-base text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50`}
           />
+          {!urlValid && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-red-400">
+              <AlertTriangle size={12} />
+              Enter a valid URL starting with http:// or https://
+            </p>
+          )}
+          {/* Quick scan button */}
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              onClick={handleScanTarget}
+              disabled={!targetUrl || !urlValid || isScanning || process.isRunning}
+              className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Radar size={12} className={isScanning ? 'animate-spin' : ''} />
+              {isScanning ? 'Scanning...' : 'Quick Scan Target'}
+            </button>
+            {scanResult && (
+              <span className={`flex items-center gap-1 text-xs ${scanResult.reachable ? 'text-green-400' : 'text-red-400'}`}>
+                {scanResult.reachable ? (
+                  <>
+                    <CheckCircle size={12} />
+                    Reachable — {scanResult.server || 'Unknown server'} (HTTP {scanResult.status})
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={12} />
+                    Target not reachable
+                  </>
+                )}
+              </span>
+            )}
+          </div>
           {/* Optional: credentials for authenticated access */}
           <details className="mt-3">
             <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-300">
@@ -198,7 +256,7 @@ export const WebsiteBreach: React.FC = () => {
 
           <button
             onClick={handleStartClick}
-            disabled={process.isRunning || !targetUrl || !outputFolder || selectedGoals.length === 0}
+            disabled={process.isRunning || !targetUrl || !outputFolder || selectedGoals.length === 0 || !urlValid}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {process.isRunning ? (

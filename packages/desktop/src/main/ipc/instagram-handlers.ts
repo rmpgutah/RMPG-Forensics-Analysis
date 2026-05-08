@@ -42,6 +42,7 @@ export function registerInstagramHandlers(): void {
         downloadTagged?: boolean;
         downloadIgtv?: boolean;
         downloadComments?: boolean;
+        downloadGeotags?: boolean;
         postFilter?: string;
         // Renderer aliases
         username?: string;
@@ -51,6 +52,7 @@ export function registerInstagramHandlers(): void {
         taggedPosts?: boolean;
         igtv?: boolean;
         comments?: boolean;
+        geotags?: boolean;
       }
     ) => {
       const target = options.target ?? options.username;
@@ -70,6 +72,7 @@ export function registerInstagramHandlers(): void {
       const downloadTagged = options.downloadTagged ?? options.taggedPosts ?? false;
       const downloadIgtv = options.downloadIgtv ?? options.igtv ?? false;
       const downloadComments = options.downloadComments ?? options.comments ?? false;
+      const downloadGeotags = options.downloadGeotags ?? options.geotags ?? false;
       const win = BrowserWindow.getAllWindows()[0] ?? null;
 
       const sendProgress = (message: string): void => {
@@ -116,6 +119,7 @@ export function registerInstagramHandlers(): void {
       if (downloadTagged) args.push('--tagged');
       if (downloadIgtv) args.push('--igtv');
       if (downloadComments) args.push('--comments');
+      if (downloadGeotags) args.push('--geotags');
 
       // Post filter (e.g., date range)
       if (postFilter) {

@@ -91,7 +91,10 @@ export function registerFileExtractHandlers(): void {
       for (let i = 0; i < remoteFiles.length; i++) {
         const remotePath = remoteFiles[i].trim();
         // Preserve relative directory structure under the output directory
-        const relativePath = remotePath.replace(/^\/sdcard\/?/, '');
+        // Handle paths from any mount point, not just /sdcard/
+        const relativePath = remotePath.startsWith(searchPath)
+          ? remotePath.slice(searchPath.length).replace(/^\//, '')
+          : remotePath.replace(/^\/+/, '');
         const localPath = path.join(outputDir, relativePath || path.basename(remotePath));
 
         if ((i + 1) % 10 === 0 || i === 0) {
