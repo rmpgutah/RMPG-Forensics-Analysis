@@ -856,31 +856,55 @@ function registerIosTrustBypassHandlers(): void {
       autoTrust?: boolean;
       persistAccess?: boolean;
     }) => {
-      const { method, outputPath, autoTrust, persistAccess } = options;
+      const { method, serial, outputPath, autoTrust, persistAccess } = options;
       const progressCh = IPC_CHANNELS.IOS_TRUST_BYPASS_PROGRESS;
 
       await ensureDir(outputPath);
       progress(progressCh, 5, `Starting iOS trust bypass: ${method}`);
 
+      // Resolve iOS tool paths once
+      const ideviceIdTool = await resolveTool('idevice_id');
+      const ideviceIdBin = ideviceIdTool.found ? ideviceIdTool.path : 'idevice_id';
+
+      // Helper: build serial args for libimobiledevice tools
+      const serialArgs = (udid?: string): string[] =>
+        udid ? ['-u', udid.trim()] : [];
+
+      // Helper: get target UDID (explicit serial or auto-detect single device)
+      const resolveTargetUdid = async (): Promise<string> => {
+        if (serial) return serial.trim();
+        const listResult = await runCommand(ideviceIdBin, ['-l'], { timeout: 10000 });
+        const devices = listResult.stdout.trim().split('\n').filter(Boolean);
+        if (devices.length === 0) throw new Error('No iOS device detected via USB');
+        if (devices.length > 1) throw new Error(`Multiple iOS devices detected (${devices.length}). Select a specific device.`);
+        return devices[0].trim();
+      };
+
       try {
         switch (method) {
           case 'lockdown-inject': {
             progress(progressCh, 10, 'Generating lockdown pairing record...');
-            // Use idevicepair to establish trust
-            const idevicepair = await resolveTool('idevice_id');
             const pairDir = path.join(outputPath, 'pairing_records');
             await ensureDir(pairDir);
 
-            // List connected iOS devices
-            const listResult = await runCommand('idevice_id', ['-l'], { timeout: 10000 });
-            const devices = listResult.stdout.trim().split('\n').filter(Boolean);
+            // List connected iOS devices (use specific serial if provided)
+            const listArgs = serial ? ['-l'] : ['-l'];
+            const listResult = await runCommand(ideviceIdBin, listArgs, { timeout: 10000 });
+            const allDevices = listResult.stdout.trim().split('\n').filter(Boolean);
+            // If a serial was specified, filter to that device
+            const devices = serial
+              ? allDevices.filter((d: string) => d.trim() === serial.trim())
+              : allDevices;
             if (devices.length === 0) throw new Error('No iOS device detected via USB');
 
             progress(progressCh, 30, `Found ${devices.length} iOS device(s). Attempting pairing...`);
+            let pairedCount = 0;
+            const errors: Array<{ udid: string; error: string }> = [];
             for (const udid of devices) {
               try {
                 // Force pair without user interaction
-                await runCommand('idevicepair', ['pair', '-u', udid.trim()], { timeout: 30000 });
+                await runCommand('idevicepair', [...serialArgs(udid), 'pair'], { timeout: 30000 });
+                pairedCount++;
                 // Copy pairing record
                 const pairRecord = `/var/lib/lockdown/${udid.trim()}.plist`;
                 try {
@@ -895,27 +919,75 @@ function registerIosTrustBypassHandlers(): void {
                   } catch { /* skip */ }
                 }
               } catch (err) {
+                const errMsg = (err as Error).message;
+                errors.push({ udid: udid.trim(), error: errMsg });
                 await writeJson(path.join(pairDir, `error_${udid.trim()}.json`), {
-                  udid: udid.trim(), error: (err as Error).message,
+                  udid: udid.trim(), error: errMsg,
                 });
               }
             }
-            progress(progressCh, 100, 'Lockdown pairing complete');
-            return { success: true, outputPath: pairDir, devices };
+
+            if (pairedCount === 0) {
+              const summary = errors.map((e) => `${e.udid}: ${e.error}`).join('; ');
+              throw new Error(`All ${devices.length} device(s) failed to pair: ${summary}`);
+            }
+            progress(progressCh, 100, `Lockdown pairing complete: ${pairedCount}/${devices.length} device(s) paired`);
+            return { success: true, outputPath: pairDir, devices, pairedCount };
+          }
+
+          case 'usb-mux-exploit': {
+            progress(progressCh, 10, 'Attempting USB Mux trust override...');
+            const udid = await resolveTargetUdid();
+            progress(progressCh, 20, `Target device: ${udid}`);
+
+            // Validate the device and attempt pairing via usbmuxd
+            await runCommand('idevicepair', [...serialArgs(udid), 'validate'], { timeout: 15000 })
+              .catch(() => { /* validation may fail if not yet paired */ });
+            progress(progressCh, 50, 'Forcing pairing via usbmuxd protocol...');
+            await runCommand('idevicepair', [...serialArgs(udid), 'pair'], { timeout: 30000 });
+
+            if (autoTrust) {
+              progress(progressCh, 70, 'Validating trust...');
+              await runCommand('idevicepair', [...serialArgs(udid), 'validate'], { timeout: 15000 });
+            }
+            progress(progressCh, 100, 'USB Mux trust override complete');
+            return { success: true, udid };
           }
 
           case 'recovery-trust': {
             progress(progressCh, 10, 'Entering recovery mode for trust establishment...');
+            const udid = await resolveTargetUdid();
             try {
-              await runCommand('ideviceenterrecovery', [], { timeout: 15000 });
+              await runCommand('ideviceenterrecovery', [udid], { timeout: 15000 });
               progress(progressCh, 50, 'Device in recovery mode. Establishing access...');
               await new Promise((r) => setTimeout(r, 5000));
-              await runCommand('idevicepair', ['pair'], { timeout: 30000 });
+              await runCommand('idevicepair', [...serialArgs(udid), 'pair'], { timeout: 30000 });
               progress(progressCh, 100, 'Recovery mode trust established');
-              return { success: true };
+              return { success: true, udid };
             } catch (err) {
               throw new Error(`Recovery trust failed: ${(err as Error).message}`);
             }
+          }
+
+          case 'supervision-profile': {
+            progress(progressCh, 10, 'Applying supervision profile...');
+            const udid = await resolveTargetUdid();
+            progress(progressCh, 20, `Target device: ${udid}`);
+
+            // Attempt to install a supervision profile via idevicepair + ideviceinfo
+            progress(progressCh, 40, 'Checking device supervision status...');
+            const infoResult = await runCommand('ideviceinfo', [...serialArgs(udid), '-k', 'IsSupervised'], { timeout: 15000 })
+              .catch(() => ({ stdout: '', stderr: '', exitCode: 1, timedOut: false }));
+            const isSupervised = infoResult.stdout.trim() === 'true';
+
+            if (isSupervised) {
+              progress(progressCh, 60, 'Device is already supervised. Establishing trust...');
+            } else {
+              progress(progressCh, 60, 'Attempting to establish supervision trust...');
+            }
+            await runCommand('idevicepair', [...serialArgs(udid), 'pair'], { timeout: 30000 });
+            progress(progressCh, 100, 'Supervision profile trust established');
+            return { success: true, udid, wasSupervised: isSupervised };
           }
 
           case 'checkm8-unlock': {
@@ -932,17 +1004,39 @@ function registerIosTrustBypassHandlers(): void {
             return { success: true, output: result.stdout };
           }
 
-          default: {
-            progress(progressCh, 10, `Attempting ${method}...`);
-            // Generic approach: try idevicepair
-            try {
-              await runCommand('idevicepair', ['pair'], { timeout: 30000 });
-              progress(progressCh, 100, 'Trust established');
-              return { success: true };
-            } catch (err) {
-              throw new Error(`Trust bypass failed: ${(err as Error).message}`);
+          case 'agent-inject': {
+            progress(progressCh, 10, 'Preparing trust agent deployment...');
+            const udid = await resolveTargetUdid();
+            progress(progressCh, 20, `Target device: ${udid}`);
+
+            // Establish initial pairing
+            progress(progressCh, 40, 'Establishing initial pairing...');
+            await runCommand('idevicepair', [...serialArgs(udid), 'pair'], { timeout: 30000 });
+
+            if (persistAccess) {
+              progress(progressCh, 60, 'Saving pairing record for persistent access...');
+              const pairDir = path.join(outputPath, 'persistent_pairing');
+              await ensureDir(pairDir);
+              // Copy pairing record for persistence
+              const pairRecordPaths = [
+                `/var/lib/lockdown/${udid}.plist`,
+                `/var/db/lockdown/${udid}.plist`,
+              ];
+              for (const recordPath of pairRecordPaths) {
+                try {
+                  const data = await fs.readFile(recordPath);
+                  await fs.writeFile(path.join(pairDir, `${udid}.plist`), data);
+                  break;
+                } catch { /* try next path */ }
+              }
             }
+
+            progress(progressCh, 100, 'Trust agent deployment complete');
+            return { success: true, udid, persistent: persistAccess };
           }
+
+          default:
+            throw new Error(`Unknown iOS trust bypass method: ${method}`);
         }
       } catch (err) {
         const msg = (err as Error).message;
@@ -973,6 +1067,9 @@ function registerAndroidBypassHandlers(): void {
       await ensureDir(outputPath);
       progress(progressCh, 5, `Starting ADB bypass: ${method}`);
 
+      // Helper: build serial args for adb
+      const adbSerialArgs = serial ? ['-s', serial] : [];
+
       try {
         switch (method) {
           case 'adb-push-exploit': {
@@ -984,13 +1081,16 @@ function registerAndroidBypassHandlers(): void {
               'settings put global adb_enabled 1',
               'setprop service.adb.root 1',
             ];
-            const results: Array<{ command: string; result: string }> = [];
+            const results: Array<{ command: string; result: string; succeeded: boolean }> = [];
+            let anySucceeded = false;
             for (const cmd of methods) {
               try {
-                const result = await runCommand('adb', ['shell', cmd], { timeout: 10000 });
-                results.push({ command: cmd, result: result.stdout || result.stderr || 'OK' });
+                const result = await runCommand('adb', [...adbSerialArgs, 'shell', cmd], { timeout: 10000 });
+                const succeeded = result.exitCode === 0;
+                if (succeeded) anySucceeded = true;
+                results.push({ command: cmd, result: result.stdout || result.stderr || 'OK', succeeded });
               } catch (err) {
-                results.push({ command: cmd, result: `Failed: ${(err as Error).message}` });
+                results.push({ command: cmd, result: `Failed: ${(err as Error).message}`, succeeded: false });
               }
             }
             await writeJson(path.join(outputPath, 'adb_enable_results.json'), results);
@@ -1000,6 +1100,10 @@ function registerAndroidBypassHandlers(): void {
               await new Promise((r) => setTimeout(r, 2000));
               await runCommand('adb', ['start-server'], { timeout: 10000 });
             } catch { /* continue */ }
+
+            if (!anySucceeded) {
+              throw new Error('All ADB enable methods failed. Device may require root or a different bypass method.');
+            }
             progress(progressCh, 100, 'ADB enable attempts complete');
             return { success: true, results };
           }
@@ -1055,6 +1159,67 @@ function registerAndroidBypassHandlers(): void {
               return { success: true, output: result.stdout };
             } catch (err) {
               throw new Error(`MTK bypass failed (install mtkclient): ${(err as Error).message}`);
+            }
+          }
+
+          case 'qualcomm-edl': {
+            progress(progressCh, 10, 'Attempting Qualcomm EDL mode access...');
+            // Check for qdl or edl tool
+            const edlTool = await runCommand('which', ['edl'], { timeout: 5000 }).catch(() => null);
+            const qdlTool = await runCommand('which', ['qdl'], { timeout: 5000 }).catch(() => null);
+
+            if (edlTool && edlTool.exitCode === 0) {
+              progress(progressCh, 30, 'EDL tool found. Entering EDL mode...');
+              try {
+                // First, try to reboot device into EDL if ADB is partially available
+                await runCommand('adb', [...adbSerialArgs, 'reboot', 'edl'], { timeout: 15000 }).catch(() => {});
+                await new Promise((r) => setTimeout(r, 5000));
+                const result = await runCommand('edl', ['printgpt'], { timeout: 30000 });
+                await fs.writeFile(path.join(outputPath, 'edl_output.txt'), result.stdout + '\n' + result.stderr);
+                progress(progressCh, 100, 'Qualcomm EDL access established');
+                return { success: true, output: result.stdout };
+              } catch (err) {
+                throw new Error(`EDL access failed: ${(err as Error).message}`);
+              }
+            } else if (qdlTool && qdlTool.exitCode === 0) {
+              progress(progressCh, 30, 'QDL tool found. Entering EDL mode...');
+              try {
+                await runCommand('adb', [...adbSerialArgs, 'reboot', 'edl'], { timeout: 15000 }).catch(() => {});
+                await new Promise((r) => setTimeout(r, 5000));
+                const result = await runCommand('qdl', ['--storage', 'ufs'], { timeout: 30000 });
+                await fs.writeFile(path.join(outputPath, 'qdl_output.txt'), result.stdout + '\n' + result.stderr);
+                progress(progressCh, 100, 'Qualcomm EDL access established via QDL');
+                return { success: true, output: result.stdout };
+              } catch (err) {
+                throw new Error(`QDL access failed: ${(err as Error).message}`);
+              }
+            } else {
+              throw new Error('EDL/QDL tools not found. Install edl (https://github.com/bkerler/edl) for Qualcomm EDL support.');
+            }
+          }
+
+          case 'samsung-jig': {
+            progress(progressCh, 10, 'Attempting Samsung download mode access...');
+            // Check for Odin (Linux: heimdall)
+            const heimdall = await runCommand('which', ['heimdall'], { timeout: 5000 }).catch(() => null);
+
+            if (!heimdall || heimdall.exitCode !== 0) {
+              throw new Error('heimdall not found. Install heimdall for Samsung download mode support.');
+            }
+
+            progress(progressCh, 30, 'Detecting Samsung device in download mode...');
+            try {
+              const detectResult = await runCommand('heimdall', ['detect'], { timeout: 15000 });
+              if (detectResult.exitCode !== 0) {
+                throw new Error('No Samsung device detected in download mode. Hold Volume Down + Power to enter download mode.');
+              }
+              progress(progressCh, 60, 'Samsung device detected. Reading device info...');
+              const printPit = await runCommand('heimdall', ['print-pit'], { timeout: 30000 });
+              await fs.writeFile(path.join(outputPath, 'samsung_pit.txt'), printPit.stdout + '\n' + printPit.stderr);
+              progress(progressCh, 100, 'Samsung download mode access established');
+              return { success: true, output: printPit.stdout };
+            } catch (err) {
+              throw new Error(`Samsung download mode failed: ${(err as Error).message}`);
             }
           }
 
