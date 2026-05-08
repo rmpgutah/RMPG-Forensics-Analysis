@@ -221,6 +221,28 @@ const UpdateBanner: React.FC = () => {
 // Python Security Toolkit
 import { PythonToolkit } from './pages/PythonToolkit';
 
+// PI & Spy Integrations
+import { SherlockOsint } from './pages/SherlockOsint';
+import { SpiderFootScanner } from './pages/SpiderFootScanner';
+import { TheHarvester } from './pages/TheHarvester';
+import { PhoneInfogaLookup } from './pages/PhoneInfogaLookup';
+import { GHuntRecon } from './pages/GHuntRecon';
+import { MaigretProfiler } from './pages/MaigretProfiler';
+import { HoleheChecker } from './pages/HoleheChecker';
+import { SocialAnalyzerTool } from './pages/SocialAnalyzerTool';
+import { PhotonCrawler } from './pages/PhotonCrawler';
+import { SkiptracerTool } from './pages/SkiptracerTool';
+import { ReconNgFramework } from './pages/ReconNgFramework';
+import { MaltegoCE } from './pages/MaltegoCE';
+import { MetagoofilExtractor } from './pages/MetagoofilExtractor';
+import { CreepyGeolocator } from './pages/CreepyGeolocator';
+import { TinEyeReverse } from './pages/TinEyeReverse';
+import { LicensePlateReader } from './pages/LicensePlateReader';
+import { CounterSurveillance } from './pages/CounterSurveillance';
+import { VehicleTracker } from './pages/VehicleTracker';
+import { StakeoutCamera } from './pages/StakeoutCamera';
+import { DeadDropComms } from './pages/DeadDropComms';
+
 // Downloads
 import { AppDownloads } from './pages/AppDownloads';
 
@@ -376,6 +398,28 @@ const App: React.FC = () => {
           <Route path="/breach/pii-polling" element={<PiiPolling />} />
           <Route path="/intel/people-search" element={<PeopleSearch />} />
           <Route path="/intel/python-toolkit" element={<PythonToolkit />} />
+
+          {/* PI & Spy Integrations */}
+          <Route path="/pi/sherlock" element={<SherlockOsint />} />
+          <Route path="/pi/spiderfoot" element={<SpiderFootScanner />} />
+          <Route path="/pi/harvester" element={<TheHarvester />} />
+          <Route path="/pi/phoneinfoga" element={<PhoneInfogaLookup />} />
+          <Route path="/pi/ghunt" element={<GHuntRecon />} />
+          <Route path="/pi/maigret" element={<MaigretProfiler />} />
+          <Route path="/pi/holehe" element={<HoleheChecker />} />
+          <Route path="/pi/social-analyzer" element={<SocialAnalyzerTool />} />
+          <Route path="/pi/photon" element={<PhotonCrawler />} />
+          <Route path="/pi/skiptracer" element={<SkiptracerTool />} />
+          <Route path="/pi/recon-ng" element={<ReconNgFramework />} />
+          <Route path="/pi/maltego" element={<MaltegoCE />} />
+          <Route path="/pi/metagoofil" element={<MetagoofilExtractor />} />
+          <Route path="/pi/creepy" element={<CreepyGeolocator />} />
+          <Route path="/pi/tineye" element={<TinEyeReverse />} />
+          <Route path="/pi/plate-reader" element={<LicensePlateReader />} />
+          <Route path="/pi/counter-surv" element={<CounterSurveillance />} />
+          <Route path="/pi/vehicle-tracker" element={<VehicleTracker />} />
+          <Route path="/pi/stakeout" element={<StakeoutCamera />} />
+          <Route path="/pi/dead-drop" element={<DeadDropComms />} />
 
           {/* Settings */}
           <Route path="/settings/tools" element={<ToolConfiguration />} />
