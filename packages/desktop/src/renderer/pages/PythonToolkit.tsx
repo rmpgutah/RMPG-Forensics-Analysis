@@ -79,7 +79,10 @@ export const PythonToolkit: React.FC = () => {
   const checkStatuses = async () => {
     setLoadingStatus(true);
     try {
-      const result = await (window as any).electron.ipcRenderer.invoke(IPC_CHANNELS.TOOLKIT_STATUS);
+      const result = (await window.api.invoke(IPC_CHANNELS.TOOLKIT_STATUS)) as {
+        success: boolean;
+        tools: Record<string, { installed: boolean; version?: string }>;
+      };
       if (result.success) {
         setToolStatuses(result.tools);
       }
@@ -90,7 +93,7 @@ export const PythonToolkit: React.FC = () => {
   const handleInstall = async (toolId: string) => {
     setInstalling(toolId);
     try {
-      await (window as any).electron.ipcRenderer.invoke(IPC_CHANNELS.TOOLKIT_INSTALL, { toolId });
+      await window.api.invoke(IPC_CHANNELS.TOOLKIT_INSTALL, { toolId });
       await checkStatuses();
     } catch { /* skip */ }
     setInstalling(null);
