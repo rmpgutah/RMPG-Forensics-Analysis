@@ -130,8 +130,6 @@ import { AbToTar } from './pages/AbToTar';
 import { SamsungUnlock } from './pages/SamsungUnlock';
 import { LockScreenRecovery } from './pages/LockScreenRecovery';
 import { EdlImager } from './pages/EdlImager';
-import { MtkClient } from './pages/MtkClient';
-import { IosBackupDecrypt } from './pages/IosBackupDecrypt';
 import { AcquisitionReport } from './pages/AcquisitionReport';
 import { JadxDecompiler } from './pages/JadxDecompiler';
 import { SqliteBrowser } from './pages/SqliteBrowser';
@@ -376,11 +374,6 @@ const App: React.FC = () => {
           {/* Miscellaneous Tools */}
           <Route path="/tools/hash-generator" element={<HashGenerator />} />
           <Route path="/tools/ab-to-tar" element={<AbToTar />} />
-          <Route path="/tools/samsung-unlock" element={<SamsungUnlock />} />
-          <Route path="/breach/lockscreen" element={<LockScreenRecovery />} />
-          <Route path="/breach/edl" element={<EdlImager />} />
-          <Route path="/breach/mtk" element={<MtkClient />} />
-          <Route path="/breach/ios-backup-decrypt" element={<IosBackupDecrypt />} />
           <Route path="/tools/acquisition-report" element={<AcquisitionReport />} />
           <Route path="/tools/jadx" element={<JadxDecompiler />} />
           <Route path="/tools/sqlite-browser" element={<SqliteBrowser />} />
@@ -391,6 +384,7 @@ const App: React.FC = () => {
           <Route path="/breach/edl-imager" element={<EdlImager />} />
           <Route path="/breach/mtk-imager" element={<MtkImager />} />
           <Route path="/breach/ios-backup-decrypt" element={<IosBackupDecrypt />} />
+          <Route path="/tools/samsung-unlock" element={<SamsungUnlock />} />
           <Route path="/breach/advanced-decrypt" element={<AdvancedDecrypt />} />
           <Route path="/breach/brute-force" element={<BruteForceAttack />} />
           <Route path="/breach/network-breach" element={<NetworkBreach />} />
