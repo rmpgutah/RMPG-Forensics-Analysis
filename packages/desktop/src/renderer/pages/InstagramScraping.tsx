@@ -138,7 +138,7 @@ export const InstagramScraping: React.FC = () => {
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-300">
-              Login Username <span className="text-xs text-slate-500">(required by Instagram)</span>
+              Login Username <span className="text-xs text-slate-500">(optional — needed only for private/protected profiles)</span>
             </label>
             <input
               type="text"

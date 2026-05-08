@@ -2257,7 +2257,7 @@ print(json.dumps({'files_scanned': files_scanned, 'pii_findings': len(findings),
             if (!python.found) throw new Error('Python required');
 
             const osintScript = `
-import urllib.request, json, sys, ssl
+import urllib.request, json, sys, ssl, re
 from urllib.parse import quote
 
 target = sys.argv[1]
@@ -2268,26 +2268,103 @@ ctx.verify_mode = ssl.CERT_NONE
 
 results = {'target': target, 'sources': []}
 
-# Check various public APIs/services
-checks = [
-    {'name': 'GitHub', 'url': f'https://api.github.com/search/users?q={quote(target)}'},
-    {'name': 'HaveIBeenPwned (simulated)', 'url': None, 'note': 'Requires API key'},
-]
-
-for check in checks:
-    if check.get('url'):
+# GitHub user search (no auth needed)
+try:
+    url = f'https://api.github.com/search/users?q={quote(target)}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    profiles = []
+    for item in data.get('items', [])[:10]:
         try:
-            req = urllib.request.Request(check['url'], headers={'User-Agent': 'RMPG-Forensics/1.0'})
-            resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-            data = json.loads(resp.read())
-            results['sources'].append({'name': check['name'], 'found': True, 'data_preview': str(data)[:500]})
-        except Exception as e:
-            results['sources'].append({'name': check['name'], 'found': False, 'error': str(e)})
+            detail_req = urllib.request.Request(item['url'], headers={'User-Agent': 'RMPG-Forensics/1.0'})
+            detail_resp = urllib.request.urlopen(detail_req, timeout=10, context=ctx)
+            detail = json.loads(detail_resp.read())
+            profiles.append({
+                'username': detail.get('login', ''),
+                'name': detail.get('name', ''),
+                'email': detail.get('email', ''),
+                'company': detail.get('company', ''),
+                'location': detail.get('location', ''),
+                'bio': detail.get('bio', ''),
+                'profile_url': detail.get('html_url', ''),
+                'repos': detail.get('public_repos', 0),
+            })
+        except: pass
+    results['sources'].append({'name': 'GitHub', 'found': bool(profiles), 'profiles': profiles})
+except Exception as e:
+    results['sources'].append({'name': 'GitHub', 'found': False, 'error': str(e)})
+
+# Reddit public search (no auth needed)
+try:
+    url = f'https://www.reddit.com/search.json?q={quote(target)}&limit=10'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    hits = []
+    for child in data.get('data', {}).get('children', []):
+        post = child.get('data', {})
+        hits.append({
+            'title': post.get('title', ''),
+            'subreddit': post.get('subreddit', ''),
+            'author': post.get('author', ''),
+            'url': f'https://reddit.com{post.get("permalink", "")}',
+        })
+    results['sources'].append({'name': 'Reddit', 'found': bool(hits), 'posts': hits})
+except Exception as e:
+    results['sources'].append({'name': 'Reddit', 'found': False, 'error': str(e)})
+
+# GitLab public search (no auth needed)
+try:
+    url = f'https://gitlab.com/api/v4/users?search={quote(target)}&per_page=5'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    gl_profiles = [{'username': u.get('username',''), 'name': u.get('name',''), 'profile_url': u.get('web_url','')} for u in data[:5]]
+    results['sources'].append({'name': 'GitLab', 'found': bool(gl_profiles), 'profiles': gl_profiles})
+except Exception as e:
+    results['sources'].append({'name': 'GitLab', 'found': False, 'error': str(e)})
+
+# Wikipedia search (no auth needed)
+try:
+    url = f'https://en.wikipedia.org/w/api.php?action=opensearch&search={quote(target)}&limit=5&format=json'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    if len(data) >= 4 and data[1]:
+        results['sources'].append({'name': 'Wikipedia', 'found': True, 'titles': data[1], 'urls': data[3]})
     else:
-        results['sources'].append({'name': check['name'], 'note': check.get('note', 'Skipped')})
+        results['sources'].append({'name': 'Wikipedia', 'found': False})
+except Exception as e:
+    results['sources'].append({'name': 'Wikipedia', 'found': False, 'error': str(e)})
+
+# Keybase public lookup (no auth needed)
+try:
+    url = f'https://keybase.io/_/api/1.0/user/lookup.json?usernames={quote(target)}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    if data.get('them') and data['them'][0]:
+        kb = data['them'][0]
+        kb_profile = {
+            'username': kb.get('basics', {}).get('username', ''),
+            'full_name': kb.get('profile', {}).get('full_name', ''),
+            'location': kb.get('profile', {}).get('location', ''),
+            'bio': kb.get('profile', {}).get('bio', ''),
+        }
+        results['sources'].append({'name': 'Keybase', 'found': True, 'profile': kb_profile})
+    else:
+        results['sources'].append({'name': 'Keybase', 'found': False})
+except Exception as e:
+    results['sources'].append({'name': 'Keybase', 'found': False, 'error': str(e)})
+
+# Extract any emails found across all sources
+all_text = json.dumps(results)
+emails_found = list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', all_text)))
+results['extracted_emails'] = emails_found
 
 json.dump(results, open(output, 'w'), indent=2)
-print(json.dumps({'sources_checked': len(results['sources']), 'found': len([s for s in results['sources'] if s.get('found')])}))
+print(json.dumps({'sources_checked': len(results['sources']), 'found': len([s for s in results['sources'] if s.get('found')]), 'emails_extracted': len(emails_found)}))
 `;
             const scriptPath = path.join(outputPath, '_osint.py');
             const resultPath = path.join(outputPath, 'osint_results.json');
@@ -2350,6 +2427,540 @@ print(json.dumps({'files_scanned': sum(1 for _ in os.walk(scan_dir)), 'pii_findi
             const result = await runCommand(python.path, [scriptPath, outputPath, resultPath, patterns.join(',')], { timeout: 120000 });
             await fs.unlink(scriptPath).catch(() => {});
             progress(progressCh, 100, 'Document PII scan complete');
+            return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
+          }
+
+          case 'email-enum': {
+            if (!targetIdentifier) throw new Error('Target identifier required for email enumeration');
+            if (!python.found) throw new Error('Python required');
+            progress(progressCh, 10, `Enumerating emails for: ${targetIdentifier}...`);
+
+            const emailEnumScript = `
+import socket, json, sys, ssl, re
+import urllib.request
+from urllib.parse import quote
+
+target = sys.argv[1]
+output = sys.argv[2]
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+results = {'target': target, 'emails_found': [], 'mx_records': [], 'dns_info': {}}
+
+# Determine if target is a domain or a name/username
+is_domain = '.' in target and ' ' not in target and '@' not in target
+is_email = '@' in target
+domain = target if is_domain else (target.split('@')[1] if is_email else None)
+
+if domain:
+    # DNS MX record lookup
+    try:
+        mx_answers = socket.getaddrinfo(domain, 25, socket.AF_INET, socket.SOCK_STREAM)
+        results['dns_info']['has_mail_server'] = len(mx_answers) > 0
+        results['dns_info']['mail_ips'] = list(set([a[4][0] for a in mx_answers]))
+    except Exception as e:
+        results['dns_info']['mx_error'] = str(e)
+
+    # IP resolution
+    try:
+        ips = socket.getaddrinfo(domain, None)
+        results['dns_info']['ips'] = list(set([ip[4][0] for ip in ips]))
+    except Exception as e:
+        results['dns_info']['ip_error'] = str(e)
+
+    # Generate common email patterns
+    common_prefixes = ['info', 'admin', 'contact', 'support', 'hello', 'office',
+                       'sales', 'help', 'mail', 'webmaster', 'postmaster',
+                       'abuse', 'security', 'noreply', 'no-reply', 'hr', 'jobs']
+    results['common_patterns'] = [f'{p}@{domain}' for p in common_prefixes]
+
+    # Check website for emails
+    for proto in ['https', 'http']:
+        try:
+            url = f'{proto}://{domain}'
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+            resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+            body = resp.read().decode('utf-8', errors='ignore')
+            emails = list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', body)))
+            results['emails_found'].extend(emails)
+            # Check contact/about pages
+            for contact_path in ['/contact', '/about', '/team', '/contact-us', '/about-us']:
+                try:
+                    creq = urllib.request.Request(f'{url}{contact_path}', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                    cresp = urllib.request.urlopen(creq, timeout=5, context=ctx)
+                    cbody = cresp.read().decode('utf-8', errors='ignore')
+                    page_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', cbody)
+                    results['emails_found'].extend(page_emails)
+                except: pass
+            break
+        except: pass
+    results['emails_found'] = list(set(results['emails_found']))
+
+# Search GitHub for the target
+try:
+    search_q = quote(target)
+    url = f'https://api.github.com/search/users?q={search_q}&per_page=5'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for item in data.get('items', [])[:5]:
+        try:
+            detail_req = urllib.request.Request(item['url'], headers={'User-Agent': 'RMPG-Forensics/1.0'})
+            detail_resp = urllib.request.urlopen(detail_req, timeout=10, context=ctx)
+            detail = json.loads(detail_resp.read())
+            if detail.get('email'):
+                results['emails_found'].append(detail['email'])
+        except: pass
+    results['emails_found'] = list(set(results['emails_found']))
+except: pass
+
+json.dump(results, open(output, 'w'), indent=2, default=str)
+print(json.dumps({'emails_found': len(results['emails_found']), 'common_patterns': len(results.get('common_patterns', [])), 'has_mx': results['dns_info'].get('has_mail_server', False)}))
+`;
+            const scriptPath = path.join(outputPath, '_email_enum.py');
+            const resultPath = path.join(outputPath, 'email_enum_results.json');
+            await fs.writeFile(scriptPath, emailEnumScript, 'utf-8');
+            const result = await runCommand(python.path, [scriptPath, targetIdentifier, resultPath], { timeout: 60000 });
+            await fs.unlink(scriptPath).catch(() => {});
+            progress(progressCh, 100, 'Email enumeration complete');
+            return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
+          }
+
+          case 'social-profile': {
+            if (!targetIdentifier) throw new Error('Target identifier required for social profiling');
+            if (!python.found) throw new Error('Python required');
+            progress(progressCh, 10, `Aggregating social profiles for: ${targetIdentifier}...`);
+
+            const socialScript = `
+import urllib.request, json, sys, ssl
+from urllib.parse import quote
+
+target = sys.argv[1]
+output = sys.argv[2]
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+results = {'target': target, 'profiles': []}
+
+# GitHub
+try:
+    url = f'https://api.github.com/search/users?q={quote(target)}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for item in data.get('items', [])[:5]:
+        try:
+            detail_req = urllib.request.Request(item['url'], headers={'User-Agent': 'RMPG-Forensics/1.0'})
+            detail_resp = urllib.request.urlopen(detail_req, timeout=10, context=ctx)
+            d = json.loads(detail_resp.read())
+            results['profiles'].append({
+                'platform': 'GitHub',
+                'username': d.get('login', ''),
+                'display_name': d.get('name', ''),
+                'bio': d.get('bio', ''),
+                'location': d.get('location', ''),
+                'email': d.get('email', ''),
+                'company': d.get('company', ''),
+                'url': d.get('html_url', ''),
+                'followers': d.get('followers', 0),
+                'repos': d.get('public_repos', 0),
+                'created': d.get('created_at', ''),
+            })
+        except: pass
+except: pass
+
+# GitLab
+try:
+    url = f'https://gitlab.com/api/v4/users?search={quote(target)}&per_page=5'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for u in data[:5]:
+        results['profiles'].append({
+            'platform': 'GitLab',
+            'username': u.get('username', ''),
+            'display_name': u.get('name', ''),
+            'bio': u.get('bio', ''),
+            'location': u.get('location', ''),
+            'url': u.get('web_url', ''),
+            'created': u.get('created_at', ''),
+        })
+except: pass
+
+# Reddit user check (public, no auth)
+try:
+    url = f'https://www.reddit.com/user/{quote(target)}/about.json'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    rd = data.get('data', {})
+    if rd.get('name'):
+        results['profiles'].append({
+            'platform': 'Reddit',
+            'username': rd.get('name', ''),
+            'url': f'https://reddit.com/u/{rd.get("name", "")}',
+            'karma': rd.get('total_karma', 0),
+            'created': rd.get('created_utc', ''),
+            'has_verified_email': rd.get('has_verified_email', False),
+        })
+except: pass
+
+# Keybase
+try:
+    url = f'https://keybase.io/_/api/1.0/user/lookup.json?usernames={quote(target)}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    if data.get('them') and data['them'][0]:
+        kb = data['them'][0]
+        results['profiles'].append({
+            'platform': 'Keybase',
+            'username': kb.get('basics', {}).get('username', ''),
+            'display_name': kb.get('profile', {}).get('full_name', ''),
+            'bio': kb.get('profile', {}).get('bio', ''),
+            'location': kb.get('profile', {}).get('location', ''),
+            'url': f'https://keybase.io/{kb.get("basics", {}).get("username", "")}',
+        })
+except: pass
+
+# Reddit search for mentions
+try:
+    url = f'https://www.reddit.com/search.json?q={quote(target)}&limit=5&sort=relevance'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    mentions = []
+    for child in data.get('data', {}).get('children', []):
+        post = child.get('data', {})
+        mentions.append({'title': post.get('title',''), 'subreddit': post.get('subreddit',''), 'url': f'https://reddit.com{post.get("permalink","")}'})
+    results['mentions'] = mentions
+except: pass
+
+json.dump(results, open(output, 'w'), indent=2, default=str)
+print(json.dumps({'profiles_found': len(results['profiles']), 'platforms': list(set(p['platform'] for p in results['profiles'])), 'mentions': len(results.get('mentions', []))}))
+`;
+            const scriptPath = path.join(outputPath, '_social_profile.py');
+            const resultPath = path.join(outputPath, 'social_profile_results.json');
+            await fs.writeFile(scriptPath, socialScript, 'utf-8');
+            const result = await runCommand(python.path, [scriptPath, targetIdentifier, resultPath], { timeout: 90000 });
+            await fs.unlink(scriptPath).catch(() => {});
+            progress(progressCh, 100, 'Social profile aggregation complete');
+            return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
+          }
+
+          case 'phone-lookup': {
+            if (!targetIdentifier) throw new Error('Target identifier required for phone lookup');
+            if (!python.found) throw new Error('Python required');
+            progress(progressCh, 10, `Analyzing phone number: ${targetIdentifier}...`);
+
+            const phoneScript = `
+import re, json, sys
+
+target = sys.argv[1]
+output = sys.argv[2]
+
+# Clean the number
+digits = re.sub(r'[^0-9+]', '', target)
+results = {'target': target, 'cleaned': digits, 'analysis': {}}
+
+# Basic US/International number parsing
+if digits.startswith('+'):
+    # International format
+    if digits.startswith('+1') and len(digits) == 12:
+        results['analysis']['country'] = 'United States / Canada'
+        results['analysis']['country_code'] = '+1'
+        local = digits[2:]
+        results['analysis']['area_code'] = local[:3]
+        results['analysis']['local_number'] = f'{local[3:6]}-{local[6:]}'
+        results['analysis']['format'] = 'NANP (North American)'
+    elif digits.startswith('+44'):
+        results['analysis']['country'] = 'United Kingdom'
+        results['analysis']['country_code'] = '+44'
+        results['analysis']['format'] = 'UK format'
+    elif digits.startswith('+61'):
+        results['analysis']['country'] = 'Australia'
+        results['analysis']['country_code'] = '+61'
+        results['analysis']['format'] = 'AU format'
+    elif digits.startswith('+91'):
+        results['analysis']['country'] = 'India'
+        results['analysis']['country_code'] = '+91'
+        results['analysis']['format'] = 'IN format'
+    elif digits.startswith('+86'):
+        results['analysis']['country'] = 'China'
+        results['analysis']['country_code'] = '+86'
+    elif digits.startswith('+49'):
+        results['analysis']['country'] = 'Germany'
+        results['analysis']['country_code'] = '+49'
+    elif digits.startswith('+33'):
+        results['analysis']['country'] = 'France'
+        results['analysis']['country_code'] = '+33'
+    elif digits.startswith('+81'):
+        results['analysis']['country'] = 'Japan'
+        results['analysis']['country_code'] = '+81'
+    elif digits.startswith('+55'):
+        results['analysis']['country'] = 'Brazil'
+        results['analysis']['country_code'] = '+55'
+    elif digits.startswith('+52'):
+        results['analysis']['country'] = 'Mexico'
+        results['analysis']['country_code'] = '+52'
+    else:
+        results['analysis']['country'] = 'Unknown (international)'
+        results['analysis']['country_code'] = digits[:3]
+elif len(digits) == 10:
+    results['analysis']['country'] = 'United States / Canada (assumed)'
+    results['analysis']['country_code'] = '+1'
+    results['analysis']['area_code'] = digits[:3]
+    results['analysis']['local_number'] = f'{digits[3:6]}-{digits[6:]}'
+    results['analysis']['format'] = 'NANP (North American)'
+elif len(digits) == 11 and digits.startswith('1'):
+    results['analysis']['country'] = 'United States / Canada'
+    results['analysis']['country_code'] = '+1'
+    results['analysis']['area_code'] = digits[1:4]
+    results['analysis']['local_number'] = f'{digits[4:7]}-{digits[7:]}'
+    results['analysis']['format'] = 'NANP (North American)'
+else:
+    results['analysis']['format'] = 'Unknown format'
+    results['analysis']['digit_count'] = len(digits)
+
+# US area code database (partial, common codes)
+US_AREA_CODES = {
+    '201': 'New Jersey', '202': 'Washington DC', '203': 'Connecticut', '206': 'Washington',
+    '207': 'Maine', '208': 'Idaho', '209': 'California', '210': 'Texas', '212': 'New York',
+    '213': 'California', '214': 'Texas', '215': 'Pennsylvania', '216': 'Ohio',
+    '217': 'Illinois', '218': 'Minnesota', '219': 'Indiana', '224': 'Illinois',
+    '225': 'Louisiana', '228': 'Mississippi', '229': 'Georgia', '231': 'Michigan',
+    '234': 'Ohio', '239': 'Florida', '240': 'Maryland', '248': 'Michigan',
+    '251': 'Alabama', '252': 'North Carolina', '253': 'Washington', '254': 'Texas',
+    '256': 'Alabama', '260': 'Indiana', '262': 'Wisconsin', '267': 'Pennsylvania',
+    '269': 'Michigan', '270': 'Kentucky', '276': 'Virginia', '281': 'Texas',
+    '301': 'Maryland', '302': 'Delaware', '303': 'Colorado', '304': 'West Virginia',
+    '305': 'Florida', '307': 'Wyoming', '308': 'Nebraska', '309': 'Illinois',
+    '310': 'California', '312': 'Illinois', '313': 'Michigan', '314': 'Missouri',
+    '315': 'New York', '316': 'Kansas', '317': 'Indiana', '318': 'Louisiana',
+    '319': 'Iowa', '320': 'Minnesota', '321': 'Florida', '323': 'California',
+    '330': 'Ohio', '331': 'Illinois', '334': 'Alabama', '336': 'North Carolina',
+    '337': 'Louisiana', '339': 'Massachusetts', '340': 'US Virgin Islands',
+    '347': 'New York', '351': 'Massachusetts', '352': 'Florida', '360': 'Washington',
+    '361': 'Texas', '385': 'Utah', '386': 'Florida', '401': 'Rhode Island',
+    '402': 'Nebraska', '404': 'Georgia', '405': 'Oklahoma', '406': 'Montana',
+    '407': 'Florida', '408': 'California', '409': 'Texas', '410': 'Maryland',
+    '412': 'Pennsylvania', '413': 'Massachusetts', '414': 'Wisconsin',
+    '415': 'California', '417': 'Missouri', '419': 'Ohio', '423': 'Tennessee',
+    '424': 'California', '425': 'Washington', '430': 'Texas', '432': 'Texas',
+    '434': 'Virginia', '435': 'Utah', '440': 'Ohio', '442': 'California',
+    '443': 'Maryland', '469': 'Texas', '470': 'Georgia', '475': 'Connecticut',
+    '478': 'Georgia', '479': 'Arkansas', '480': 'Arizona', '484': 'Pennsylvania',
+    '501': 'Arkansas', '502': 'Kentucky', '503': 'Oregon', '504': 'Louisiana',
+    '505': 'New Mexico', '507': 'Minnesota', '508': 'Massachusetts', '509': 'Washington',
+    '510': 'California', '512': 'Texas', '513': 'Ohio', '515': 'Iowa',
+    '516': 'New York', '517': 'Michigan', '518': 'New York', '520': 'Arizona',
+    '530': 'California', '531': 'Nebraska', '534': 'Wisconsin', '539': 'Oklahoma',
+    '540': 'Virginia', '541': 'Oregon', '551': 'New Jersey', '559': 'California',
+    '561': 'Florida', '562': 'California', '563': 'Iowa', '567': 'Ohio',
+    '570': 'Pennsylvania', '571': 'Virginia', '573': 'Missouri', '574': 'Indiana',
+    '580': 'Oklahoma', '585': 'New York', '586': 'Michigan', '601': 'Mississippi',
+    '602': 'Arizona', '603': 'New Hampshire', '605': 'South Dakota', '606': 'Kentucky',
+    '607': 'New York', '608': 'Wisconsin', '609': 'New Jersey', '610': 'Pennsylvania',
+    '612': 'Minnesota', '614': 'Ohio', '615': 'Tennessee', '616': 'Michigan',
+    '617': 'Massachusetts', '618': 'Illinois', '619': 'California', '620': 'Kansas',
+    '623': 'Arizona', '626': 'California', '630': 'Illinois', '631': 'New York',
+    '636': 'Missouri', '641': 'Iowa', '646': 'New York', '650': 'California',
+    '651': 'Minnesota', '657': 'California', '660': 'Missouri', '661': 'California',
+    '662': 'Mississippi', '667': 'Maryland', '669': 'California', '678': 'Georgia',
+    '681': 'West Virginia', '682': 'Texas', '701': 'North Dakota', '702': 'Nevada',
+    '703': 'Virginia', '704': 'North Carolina', '706': 'Georgia', '707': 'California',
+    '708': 'Illinois', '712': 'Iowa', '713': 'Texas', '714': 'California',
+    '715': 'Wisconsin', '716': 'New York', '717': 'Pennsylvania', '718': 'New York',
+    '719': 'Colorado', '720': 'Colorado', '724': 'Pennsylvania', '725': 'Nevada',
+    '727': 'Florida', '731': 'Tennessee', '732': 'New Jersey', '734': 'Michigan',
+    '737': 'Texas', '740': 'Ohio', '747': 'California', '754': 'Florida',
+    '757': 'Virginia', '760': 'California', '762': 'Georgia', '763': 'Minnesota',
+    '765': 'Indiana', '769': 'Mississippi', '770': 'Georgia', '772': 'Florida',
+    '773': 'Illinois', '774': 'Massachusetts', '775': 'Nevada', '779': 'Illinois',
+    '781': 'Massachusetts', '785': 'Kansas', '786': 'Florida', '801': 'Utah',
+    '802': 'Vermont', '803': 'South Carolina', '804': 'Virginia', '805': 'California',
+    '806': 'Texas', '808': 'Hawaii', '810': 'Michigan', '812': 'Indiana',
+    '813': 'Florida', '814': 'Pennsylvania', '815': 'Illinois', '816': 'Missouri',
+    '817': 'Texas', '818': 'California', '828': 'North Carolina', '830': 'Texas',
+    '831': 'California', '832': 'Texas', '843': 'South Carolina', '845': 'New York',
+    '847': 'Illinois', '848': 'New Jersey', '850': 'Florida', '856': 'New Jersey',
+    '857': 'Massachusetts', '858': 'California', '859': 'Kentucky', '860': 'Connecticut',
+    '862': 'New Jersey', '863': 'Florida', '864': 'South Carolina', '865': 'Tennessee',
+    '870': 'Arkansas', '872': 'Illinois', '878': 'Pennsylvania', '901': 'Tennessee',
+    '903': 'Texas', '904': 'Florida', '906': 'Michigan', '907': 'Alaska',
+    '908': 'New Jersey', '909': 'California', '910': 'North Carolina', '912': 'Georgia',
+    '913': 'Kansas', '914': 'New York', '915': 'Texas', '916': 'California',
+    '917': 'New York', '918': 'Oklahoma', '919': 'North Carolina', '920': 'Wisconsin',
+    '925': 'California', '928': 'Arizona', '929': 'New York', '931': 'Tennessee',
+    '936': 'Texas', '937': 'Ohio', '938': 'Alabama', '940': 'Texas',
+    '941': 'Florida', '947': 'Michigan', '949': 'California', '951': 'California',
+    '952': 'Minnesota', '954': 'Florida', '956': 'Texas', '959': 'Connecticut',
+    '970': 'Colorado', '971': 'Oregon', '972': 'Texas', '973': 'New Jersey',
+    '978': 'Massachusetts', '979': 'Texas', '980': 'North Carolina', '985': 'Louisiana',
+}
+
+ac = results['analysis'].get('area_code', '')
+if ac in US_AREA_CODES:
+    results['analysis']['region'] = US_AREA_CODES[ac]
+
+# Number type heuristics
+results['analysis']['is_valid_length'] = len(digits.lstrip('+')) >= 7
+results['analysis']['is_toll_free'] = ac in ['800', '888', '877', '866', '855', '844', '833']
+results['analysis']['is_premium'] = ac in ['900', '976']
+
+json.dump(results, open(output, 'w'), indent=2, default=str)
+analysis = results['analysis']
+print(json.dumps({'country': analysis.get('country','Unknown'), 'region': analysis.get('region',''), 'format': analysis.get('format',''), 'valid': analysis.get('is_valid_length', False)}))
+`;
+            const scriptPath = path.join(outputPath, '_phone_lookup.py');
+            const resultPath = path.join(outputPath, 'phone_lookup_results.json');
+            await fs.writeFile(scriptPath, phoneScript, 'utf-8');
+            const result = await runCommand(python.path, [scriptPath, targetIdentifier, resultPath], { timeout: 30000 });
+            await fs.unlink(scriptPath).catch(() => {});
+            progress(progressCh, 100, 'Phone number analysis complete');
+            return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
+          }
+
+          case 'domain-whois': {
+            if (!targetIdentifier) throw new Error('Target identifier required for domain/IP intelligence');
+            if (!python.found) throw new Error('Python required');
+            progress(progressCh, 10, `Gathering domain/IP intelligence for: ${targetIdentifier}...`);
+
+            const domainScript = `
+import socket, json, sys, ssl, re
+import urllib.request
+from urllib.parse import quote
+
+target = sys.argv[1]
+output = sys.argv[2]
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+results = {'target': target, 'dns': {}, 'http': {}, 'ssl_info': {}}
+
+# Determine if IP or domain
+is_ip = bool(re.match(r'^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$', target))
+domain = target
+
+# DNS resolution
+if not is_ip:
+    try:
+        ips = socket.getaddrinfo(domain, None)
+        results['dns']['a_records'] = list(set([ip[4][0] for ip in ips if ip[0] == socket.AF_INET]))
+        results['dns']['aaaa_records'] = list(set([ip[4][0] for ip in ips if ip[0] == socket.AF_INET6]))
+    except Exception as e:
+        results['dns']['error'] = str(e)
+
+    # MX records via port 25 check
+    try:
+        mx_info = socket.getaddrinfo(domain, 25, socket.AF_INET, socket.SOCK_STREAM)
+        results['dns']['has_mx'] = len(mx_info) > 0
+        results['dns']['mx_ips'] = list(set([m[4][0] for m in mx_info]))
+    except:
+        results['dns']['has_mx'] = False
+
+    # NS check (common nameserver subdomains)
+    for ns_prefix in ['ns1', 'ns2', 'dns1', 'dns2']:
+        try:
+            ns_host = f'{ns_prefix}.{domain}'
+            ns_ips = socket.getaddrinfo(ns_host, None)
+            if 'nameservers' not in results['dns']:
+                results['dns']['nameservers'] = []
+            results['dns']['nameservers'].append({'host': ns_host, 'ip': ns_ips[0][4][0]})
+        except:
+            pass
+else:
+    # Reverse DNS for IP
+    try:
+        hostname = socket.gethostbyaddr(target)
+        results['dns']['reverse_dns'] = hostname[0]
+        results['dns']['aliases'] = hostname[1]
+    except Exception as e:
+        results['dns']['reverse_dns_error'] = str(e)
+
+# HTTP inspection (no credentials needed)
+for proto in ['https', 'http']:
+    try:
+        url = f'{proto}://{domain}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        body = resp.read().decode('utf-8', errors='ignore')[:5000]
+        results['http']['status'] = resp.status
+        results['http']['server'] = resp.headers.get('Server', '')
+        results['http']['powered_by'] = resp.headers.get('X-Powered-By', '')
+        results['http']['content_type'] = resp.headers.get('Content-Type', '')
+        results['http']['all_headers'] = dict(resp.headers)
+
+        # Technology detection
+        techs = []
+        if 'wp-content' in body or 'wp-includes' in body: techs.append('WordPress')
+        if 'drupal' in body.lower(): techs.append('Drupal')
+        if 'joomla' in body.lower(): techs.append('Joomla')
+        if '__NEXT_DATA__' in body or 'next/static' in body: techs.append('Next.js')
+        if '_nuxt' in body: techs.append('Nuxt.js')
+        if 'react' in body.lower(): techs.append('React')
+        if 'angular' in body.lower(): techs.append('Angular')
+        if 'laravel' in body.lower(): techs.append('Laravel')
+        if 'django' in body.lower(): techs.append('Django')
+        if 'shopify' in body.lower(): techs.append('Shopify')
+        if 'cloudflare' in str(resp.headers).lower(): techs.append('Cloudflare')
+        results['http']['technologies'] = techs
+
+        # Extract title
+        title_match = re.search(r'<title[^>]*>(.*?)</title>', body, re.IGNORECASE | re.DOTALL)
+        if title_match:
+            results['http']['title'] = title_match.group(1).strip()[:200]
+
+        # Check common paths
+        common = ['/robots.txt', '/sitemap.xml', '/.well-known/security.txt']
+        results['http']['paths'] = {}
+        for p in common:
+            try:
+                preq = urllib.request.Request(f'{url}{p}', headers={'User-Agent': 'Mozilla/5.0'})
+                presp = urllib.request.urlopen(preq, timeout=5, context=ctx)
+                pcontent = presp.read().decode('utf-8', errors='ignore')[:2000]
+                results['http']['paths'][p] = {'status': presp.status, 'preview': pcontent[:500]}
+            except urllib.error.HTTPError as e:
+                results['http']['paths'][p] = {'status': e.code}
+            except:
+                pass
+        break
+    except Exception as e:
+        results['http'][f'{proto}_error'] = str(e)
+
+# SSL certificate info (no credentials needed)
+if not is_ip:
+    try:
+        import ssl as ssl_mod
+        conn_ctx = ssl_mod.create_default_context()
+        with socket.create_connection((domain, 443), timeout=10) as sock:
+            with conn_ctx.wrap_socket(sock, server_hostname=domain) as ssock:
+                cert = ssock.getpeercert()
+                results['ssl_info'] = {
+                    'subject': dict(x[0] for x in cert.get('subject', [])),
+                    'issuer': dict(x[0] for x in cert.get('issuer', [])),
+                    'valid_from': cert.get('notBefore', ''),
+                    'valid_until': cert.get('notAfter', ''),
+                    'serial_number': cert.get('serialNumber', ''),
+                    'san': [entry[1] for entry in cert.get('subjectAltName', [])],
+                    'version': cert.get('version', ''),
+                }
+    except Exception as e:
+        results['ssl_info']['error'] = str(e)
+
+json.dump(results, open(output, 'w'), indent=2, default=str)
+dns_count = len(results['dns'].get('a_records', []))
+print(json.dumps({'dns_records': dns_count, 'server': results['http'].get('server',''), 'technologies': results['http'].get('technologies',[]), 'has_ssl': bool(results['ssl_info'].get('subject'))}))
+`;
+            const scriptPath = path.join(outputPath, '_domain_whois.py');
+            const resultPath = path.join(outputPath, 'domain_intel_results.json');
+            await fs.writeFile(scriptPath, domainScript, 'utf-8');
+            const result = await runCommand(python.path, [scriptPath, targetIdentifier, resultPath], { timeout: 60000 });
+            await fs.unlink(scriptPath).catch(() => {});
+            progress(progressCh, 100, 'Domain/IP intelligence complete');
             return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
           }
 
