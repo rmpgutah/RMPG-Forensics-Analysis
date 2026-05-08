@@ -2175,17 +2175,25 @@ patterns = patterns_str.split(',')
 
 REGEX_MAP = {
     'ssn': r'\\b\\d{3}-\\d{2}-\\d{4}\\b',
-    'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\\b',
+    'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b',
     'email': r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b',
     'phone': r'\\b(?:\\+?1?[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b',
-    'ip-address': r'\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b',
+    'ip-address': r'\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b',
     'dob': r'\\b(?:0[1-9]|1[0-2])[/\\-](?:0[1-9]|[12]\\d|3[01])[/\\-](?:19|20)\\d{2}\\b',
     'bank-account': r'\\b\\d{8,17}\\b',
     'passport': r'\\b[A-Z]{1,2}\\d{6,9}\\b',
+    'drivers-license': r'\\b[A-Z]{1,2}\\d{5,8}\\b',
+    'username': r'(?:username|user|login|account)[\\s:=]+["\\'\\s]*([A-Za-z0-9._@-]{3,30})',
+    'password': r'(?:password|passwd|pass|pwd|secret)[\\s:=]+["\\'\\s]*([^\\s"\\',;]{4,50})',
+    'medical': r'(?:MRN|medical.record|patient.id|diagnosis|ICD[-]?\\d{1,2})[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'biometric': r'(?:fingerprint|face.id|iris|retina|biometric|facial.recognition)[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'address': r'\\b\\d{1,5}\\s+[A-Z][a-z]+\\s+(?:St|Ave|Blvd|Dr|Rd|Ln|Way|Ct|Pl|Cir|Pkwy|Terr?)\\b',
 }
 
 findings = []
 files_scanned = 0
+all_matches_by_type = {}
+
 for root, dirs, files in os.walk(scan_dir):
     for fname in files:
         fpath = os.path.join(root, fname)
@@ -2203,18 +2211,36 @@ for root, dirs, files in os.walk(scan_dir):
                             'count': len(matches),
                             'samples': matches[:10]
                         })
+                        if ptype not in all_matches_by_type:
+                            all_matches_by_type[ptype] = set()
+                        all_matches_by_type[ptype].update(matches[:50])
         except:
             pass
+
+# Cross-reference: find items that appear in multiple files
+cross_refs = []
+for ptype, values in all_matches_by_type.items():
+    for val in list(values)[:20]:
+        occurrences = [f for f in findings if f['type'] == ptype and val in f.get('samples', [])]
+        if len(occurrences) > 1:
+            cross_refs.append({
+                'type': ptype,
+                'value': val[:30] + '...' if len(val) > 30 else val,
+                'found_in_files': len(occurrences),
+                'files': [o['file'] for o in occurrences[:5]]
+            })
 
 result = {
     'scan_dir': scan_dir,
     'files_scanned': files_scanned,
     'findings': findings,
     'total_pii_items': sum(f['count'] for f in findings),
-    'patterns_checked': patterns
+    'patterns_checked': patterns,
+    'summary_by_type': {t: sum(f['count'] for f in findings if f['type'] == t) for t in set(f['type'] for f in findings)},
+    'cross_references': cross_refs
 }
 json.dump(result, open(output_file, 'w'), indent=2)
-print(json.dumps({'files_scanned': files_scanned, 'pii_findings': len(findings), 'total_items': result['total_pii_items']}))
+print(json.dumps({'files_scanned': files_scanned, 'pii_findings': len(findings), 'total_items': result['total_pii_items'], 'cross_refs': len(cross_refs)}))
 `;
             const scriptPath = path.join(outputPath, '_pii_scan.py');
             const resultPath = path.join(outputPath, 'pii_scan_results.json');
@@ -2285,10 +2311,19 @@ patterns_str = sys.argv[3]
 
 REGEX_MAP = {
     'ssn': r'\\b\\d{3}-\\d{2}-\\d{4}\\b',
-    'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\\b',
+    'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b',
     'email': r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b',
     'phone': r'\\b(?:\\+?1?[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b',
-    'ip-address': r'\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b',
+    'ip-address': r'\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b',
+    'dob': r'\\b(?:0[1-9]|1[0-2])[/\\-](?:0[1-9]|[12]\\d|3[01])[/\\-](?:19|20)\\d{2}\\b',
+    'bank-account': r'\\b\\d{8,17}\\b',
+    'passport': r'\\b[A-Z]{1,2}\\d{6,9}\\b',
+    'drivers-license': r'\\b[A-Z]{1,2}\\d{5,8}\\b',
+    'username': r'(?:username|user|login|account)[\\s:=]+["\\'\\s]*([A-Za-z0-9._@-]{3,30})',
+    'password': r'(?:password|passwd|pass|pwd|secret)[\\s:=]+["\\'\\s]*([^\\s"\\',;]{4,50})',
+    'medical': r'(?:MRN|medical.record|patient.id|diagnosis|ICD[-]?\\d{1,2})[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'biometric': r'(?:fingerprint|face.id|iris|retina|biometric|facial.recognition)[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'address': r'\\b\\d{1,5}\\s+[A-Z][a-z]+\\s+(?:St|Ave|Blvd|Dr|Rd|Ln|Way|Ct|Pl|Cir|Pkwy|Terr?)\\b',
 }
 
 findings = []
@@ -2319,6 +2354,200 @@ print(json.dumps({'files_scanned': sum(1 for _ in os.walk(scan_dir)), 'pii_findi
           }
 
           default: {
+            if (source === 'breach-check') {
+              // Breach-check: comprehensive OSINT + local scan combined approach
+              if (!targetIdentifier) throw new Error('Target identifier required for breach check');
+              if (!python.found) throw new Error('Python required for breach check');
+
+              progress(progressCh, 10, `Running breach check for: ${targetIdentifier}...`);
+
+              const breachScript = `
+import urllib.request, json, sys, ssl, re, os
+from urllib.parse import quote
+
+target = sys.argv[1]
+output_dir = sys.argv[2]
+patterns_str = sys.argv[3]
+deep_scan = sys.argv[4] == 'true'
+cross_ref = sys.argv[5] == 'true'
+patterns = patterns_str.split(',')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+results = {
+    'target': target,
+    'scan_type': 'breach-check',
+    'deep_scan': deep_scan,
+    'patterns_requested': patterns,
+    'osint_findings': {},
+    'breach_indicators': [],
+    'cross_references': [],
+}
+
+# --- OSINT Phase ---
+# GitHub search for target
+try:
+    url = f'https://api.github.com/search/users?q={quote(target)}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    profiles = []
+    for item in data.get('items', [])[:10]:
+        try:
+            detail_req = urllib.request.Request(item['url'], headers={'User-Agent': 'RMPG-Forensics/1.0'})
+            detail_resp = urllib.request.urlopen(detail_req, timeout=10, context=ctx)
+            detail = json.loads(detail_resp.read())
+            profile = {
+                'source': 'github',
+                'username': detail.get('login', ''),
+                'name': detail.get('name', ''),
+                'email': detail.get('email', ''),
+                'company': detail.get('company', ''),
+                'location': detail.get('location', ''),
+                'bio': detail.get('bio', ''),
+                'avatar_url': detail.get('avatar_url', ''),
+                'profile_url': detail.get('html_url', ''),
+                'created': detail.get('created_at', ''),
+                'repos': detail.get('public_repos', 0),
+            }
+            profiles.append(profile)
+
+            # Deep scan: check repos for leaked secrets
+            if deep_scan and 'email' in patterns:
+                try:
+                    repos_req = urllib.request.Request(
+                        f'{item["url"]}/repos?per_page=5&sort=updated',
+                        headers={'User-Agent': 'RMPG-Forensics/1.0'}
+                    )
+                    repos_resp = urllib.request.urlopen(repos_req, timeout=10, context=ctx)
+                    repos = json.loads(repos_resp.read())
+                    for repo in repos:
+                        if repo.get('description'):
+                            emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', repo['description'])
+                            for e in emails:
+                                results['breach_indicators'].append({
+                                    'type': 'email',
+                                    'value': e,
+                                    'source': f'github_repo:{repo["full_name"]}',
+                                    'confidence': 'medium',
+                                })
+                except: pass
+        except: pass
+    results['osint_findings']['github'] = profiles
+except Exception as e:
+    results['osint_findings']['github_error'] = str(e)
+
+# Reddit search
+try:
+    url = f'https://www.reddit.com/search.json?q={quote(target)}&limit=5'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG-Forensics/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    reddit_hits = []
+    for child in data.get('data', {}).get('children', []):
+        post = child.get('data', {})
+        reddit_hits.append({
+            'title': post.get('title', ''),
+            'subreddit': post.get('subreddit', ''),
+            'author': post.get('author', ''),
+            'url': f'https://reddit.com{post.get("permalink", "")}',
+        })
+    results['osint_findings']['reddit'] = reddit_hits
+except Exception as e:
+    results['osint_findings']['reddit_error'] = str(e)
+
+# --- Scan existing local files if output_dir has content ---
+REGEX_MAP = {
+    'ssn': r'\\b\\d{3}-\\d{2}-\\d{4}\\b',
+    'credit-card': r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\\b',
+    'email': r'\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b',
+    'phone': r'\\b(?:\\+?1?[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b',
+    'ip-address': r'\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b',
+    'dob': r'\\b(?:0[1-9]|1[0-2])[/\\-](?:0[1-9]|[12]\\d|3[01])[/\\-](?:19|20)\\d{2}\\b',
+    'bank-account': r'\\b\\d{8,17}\\b',
+    'passport': r'\\b[A-Z]{1,2}\\d{6,9}\\b',
+    'drivers-license': r'\\b[A-Z]{1,2}\\d{5,8}\\b',
+    'username': r'(?:username|user|login|account)[\\s:=]+["\\'\\s]*([A-Za-z0-9._@-]{3,30})',
+    'password': r'(?:password|passwd|pass|pwd|secret)[\\s:=]+["\\'\\s]*([^\\s"\\',;]{4,50})',
+    'medical': r'(?:MRN|medical.record|patient.id|diagnosis|ICD[-]?\\d{1,2})[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'biometric': r'(?:fingerprint|face.id|iris|retina|biometric)[\\s:=]+["\\'\\s]*([^\\s"\\',;]+)',
+    'address': r'\\b\\d{1,5}\\s+[A-Z][a-z]+\\s+(?:St|Ave|Blvd|Dr|Rd|Ln|Way|Ct|Pl|Cir|Pkwy|Terr?)\\b',
+}
+local_findings = []
+if os.path.isdir(output_dir):
+    for root, dirs, files in os.walk(output_dir):
+        for fname in files:
+            if fname.startswith('_') or fname.endswith('.py'):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, 'r', errors='ignore') as f:
+                    content = f.read(2000000)
+                for ptype in patterns:
+                    if ptype in REGEX_MAP:
+                        matches = re.findall(REGEX_MAP[ptype], content)
+                        if matches:
+                            local_findings.append({
+                                'file': os.path.relpath(fpath, output_dir),
+                                'type': ptype,
+                                'count': len(matches),
+                                'samples': matches[:10],
+                            })
+            except: pass
+results['local_scan'] = local_findings
+
+# --- Cross-reference ---
+if cross_ref:
+    all_emails = set()
+    all_usernames = set()
+    for profile in results['osint_findings'].get('github', []):
+        if profile.get('email'): all_emails.add(profile['email'])
+        if profile.get('username'): all_usernames.add(profile['username'])
+    for finding in local_findings:
+        if finding['type'] == 'email':
+            all_emails.update(finding['samples'])
+        if finding['type'] == 'username':
+            all_usernames.update(finding['samples'])
+    for ind in results.get('breach_indicators', []):
+        if ind['type'] == 'email':
+            all_emails.add(ind['value'])
+    results['cross_references'] = {
+        'unique_emails': sorted(all_emails),
+        'unique_usernames': sorted(all_usernames),
+        'email_username_overlap': sorted(all_emails & all_usernames),
+    }
+
+# Summary
+summary = {
+    'osint_sources_checked': len(results['osint_findings']),
+    'breach_indicators': len(results['breach_indicators']),
+    'local_findings': len(local_findings),
+    'patterns_scanned': len(patterns),
+}
+
+os.makedirs(output_dir, exist_ok=True)
+output_file = os.path.join(output_dir, 'breach_check_results.json')
+json.dump(results, open(output_file, 'w'), indent=2, default=str)
+print(json.dumps(summary))
+`;
+              const scriptPath = path.join(outputPath, '_breach_check.py');
+              await fs.writeFile(scriptPath, breachScript, 'utf-8');
+              const result = await runCommand(python.path, [
+                scriptPath, targetIdentifier, outputPath, patterns.join(','),
+                deepScan ? 'true' : 'false',
+                options.crossReference ? 'true' : 'false',
+              ], { timeout: 180000 });
+              await fs.unlink(scriptPath).catch(() => {});
+              progress(progressCh, 100, 'Breach check complete');
+              return {
+                success: true,
+                outputPath: path.join(outputPath, 'breach_check_results.json'),
+                summary: result.stdout.trim(),
+              };
+            }
+
             progress(progressCh, 50, `Source "${source}" processing...`);
             await writeJson(path.join(outputPath, 'pii_config.json'), options);
             progress(progressCh, 100, 'Configuration saved');
