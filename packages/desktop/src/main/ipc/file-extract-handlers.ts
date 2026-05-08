@@ -63,7 +63,7 @@ export function registerFileExtractHandlers(): void {
       // Sanitize: extensions must be alphanum+dot only; searchPath must be absolute
       const safeExts = extensions.map((ext) => {
         const normalized = (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase();
-        if (!/^\.[a-z0-9]+$/i.test(normalized)) throw new Error(`Invalid extension: ${ext}`);
+        if (!/^\.[a-z0-9]+$/.test(normalized)) throw new Error(`Invalid extension: ${ext}`);
         return normalized;
       });
       if (!/^\//.test(searchPath)) throw new Error('searchPath must be an absolute path');
