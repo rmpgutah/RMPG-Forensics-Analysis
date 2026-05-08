@@ -163,7 +163,7 @@ try:
                             stype = s.get('interactionType', {})
                             if isinstance(stype, dict):
                                 results['profile']['structured_data'][stype.get('@type', 'stat')] = s.get('userInteractionCount', 0)
-        except: pass
+        except Exception: pass
 
     # Extract any embedded JSON data (shared_data, additional_data)
     for json_match in re.findall(r'window\\._sharedData\\s*=\\s*(\\{.*?\\});', body, re.DOTALL):
@@ -204,7 +204,7 @@ try:
                             if node.get('location'):
                                 post['location'] = node['location'].get('name', '')
                             results['posts'].append(post)
-        except: pass
+        except Exception: pass
 
     # Extract any links found on the page
     all_urls = re.findall(r'https?://[^"\\'>\\s]+', body)

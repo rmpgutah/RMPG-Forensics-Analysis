@@ -1817,7 +1817,7 @@ if body:
     internal_links = set()
     external_links = set()
     for href in re.findall(r'href=["\\'](.*?)["\\'\\s]', body, re.IGNORECASE):
-        if href.startswith('#') or href.startswith('javascript:') or href.startswith('mailto:'):
+        if href.startswith('#') or href.startswith('javascript:') or href.startswith('mailto:') or href.startswith('tel:') or href.startswith('data:'):
             continue
         if href.startswith('/') or href.startswith(target):
             internal_links.add(href[:200])
@@ -1850,7 +1850,7 @@ if body:
                 full_url = link
             sub_req = urllib.request.Request(full_url, headers={'User-Agent': ua})
             sub_resp = urllib.request.urlopen(sub_req, timeout=5, context=ctx)
-            sub_body = sub_resp.read().decode('utf-8', errors='ignore')
+            sub_body = sub_resp.read(200000).decode('utf-8', errors='ignore')
             sub_emails = list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', sub_body)))
             sub_phones = list(set(re.findall(r'\\b(?:\\+?1[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b', sub_body)))
             sub_data = {'status': sub_resp.status, 'size': len(sub_body)}
@@ -1864,7 +1864,7 @@ if body:
                         social_links[platform] = []
                     social_links[platform] = list(set(social_links.get(platform, []) + matches))[:5]
             subpage_data[link] = sub_data
-        except:
+        except Exception:
             pass
     results['extraction']['subpage_crawl'] = subpage_data
     results['extraction']['social_links'] = social_links  # Update with subpage findings
@@ -1941,9 +1941,9 @@ header_payloads = [
 
 # SQL error signatures for detection
 error_signatures = [
-    'sql syntax', 'mysql', 'postgresql', 'oracle', 'sqlite', 'microsoft sql',
+    'sql syntax', 'mysql_', 'mysql_fetch', 'mysqli_', 'postgresql', 'oracle', 'sqlite', 'microsoft sql',
     'unclosed quotation', 'quoted string not properly terminated',
-    'you have an error in your sql', 'syntax error', 'pg_query',
+    'you have an error in your sql', 'syntax error at or near', 'pg_query',
     'supplied argument is not a valid', 'mysql_fetch', 'mysqli_',
     'pg_exec', 'odbc_', 'ora-\\d{5}', 'db2_', 'sybase',
     'jdbc', 'sqlstate', 'warning.*mysql', 'valid mysql result',
@@ -2206,11 +2206,11 @@ def test_path(word):
         elif e.code not in [404]:
             return ('found', {'path': f"/{word}", 'status': e.code})
         return ('not_found', None)
-    except:
+    except Exception:
         return ('error', None)
 
 # Thread pool for fast enumeration
-with ThreadPoolExecutor(max_workers=15) as executor:
+with ThreadPoolExecutor(max_workers=10) as executor:
     futures = {executor.submit(test_path, word): word for word in dirs}
     for future in as_completed(futures):
         results['tested'] += 1
