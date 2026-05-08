@@ -1621,13 +1621,15 @@ function registerWebBreachHandlers(): void {
       targetUrl: string;
       attackVector: string;
       outputPath: string;
+      goals?: string[];
       wordlistPath?: string;
       maxDepth?: number;
       threads?: number;
       followRedirects?: boolean;
       stealthMode?: boolean;
+      credentials?: { loginUrl: string; username: string; password: string };
     }) => {
-      const { targetUrl, attackVector, outputPath, wordlistPath, maxDepth = 3, threads = 10, stealthMode } = options;
+      const { targetUrl, attackVector, outputPath, goals = [], maxDepth = 3, threads = 10, stealthMode, credentials } = options;
       const progressCh = IPC_CHANNELS.WEB_BREACH_PROGRESS;
 
       await ensureDir(outputPath);
@@ -1636,21 +1638,37 @@ function registerWebBreachHandlers(): void {
       const python = await resolveTool('python');
       if (!python.found) throw new Error('Python is required for web breach operations');
 
+      // Validate URL format
       try {
+        const parsed = new URL(targetUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new Error('Only http and https URLs are supported');
+        }
+      } catch (urlErr) {
+        if ((urlErr as Error).message.includes('Only http')) throw urlErr;
+        throw new Error(`Invalid URL: ${targetUrl}`);
+      }
+
+      try {
+        const goalsJson = JSON.stringify(goals);
         switch (attackVector) {
           case 'full-recon': {
             progress(progressCh, 10, 'Running full reconnaissance...');
             const reconScript = `
-import urllib.request, urllib.error, json, sys, ssl, socket
+import urllib.request, urllib.error, json, sys, ssl, socket, re
 from urllib.parse import urlparse
 
 target = sys.argv[1]
 output = sys.argv[2]
+goals = json.loads(sys.argv[3]) if len(sys.argv) > 3 else []
+stealth = sys.argv[4] == 'true' if len(sys.argv) > 4 else False
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
-results = {'target': target, 'recon': {}}
+ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' if stealth else 'Mozilla/5.0 (RMPG Forensics)'
+
+results = {'target': target, 'goals': goals, 'recon': {}, 'extraction': {}}
 parsed = urlparse(target)
 host = parsed.hostname
 
@@ -1661,38 +1679,124 @@ try:
 except Exception as e:
     results['recon']['dns_error'] = str(e)
 
-# HTTP headers
+# HTTP headers & technology fingerprinting
 try:
-    req = urllib.request.Request(target, headers={'User-Agent': 'Mozilla/5.0'})
+    req = urllib.request.Request(target, headers={'User-Agent': ua})
     resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    body = resp.read().decode('utf-8', errors='ignore')
     results['recon']['status'] = resp.status
     results['recon']['headers'] = dict(resp.headers)
     results['recon']['server'] = resp.headers.get('Server', 'Unknown')
     results['recon']['powered_by'] = resp.headers.get('X-Powered-By', 'Unknown')
+    results['recon']['content_length'] = len(body)
+
+    # Technology detection
+    techs = []
+    if 'wp-content' in body or 'wp-includes' in body: techs.append('WordPress')
+    if 'drupal' in body.lower(): techs.append('Drupal')
+    if 'joomla' in body.lower(): techs.append('Joomla')
+    if 'react' in body.lower() or '__NEXT_DATA__' in body: techs.append('React/Next.js')
+    if 'angular' in body.lower(): techs.append('Angular')
+    if 'laravel' in body.lower(): techs.append('Laravel')
+    if 'django' in body.lower(): techs.append('Django')
+    results['recon']['technologies'] = techs
 except Exception as e:
     results['recon']['http_error'] = str(e)
+    body = ''
 
 # Common paths check
 common_paths = ['/robots.txt', '/sitemap.xml', '/.git/HEAD', '/.env', '/wp-login.php',
-    '/admin', '/administrator', '/.htaccess', '/backup', '/api', '/graphql']
+    '/admin', '/administrator', '/.htaccess', '/backup', '/api', '/graphql',
+    '/swagger', '/api/docs', '/.well-known/security.txt', '/server-status',
+    '/debug', '/trace', '/console', '/phpmyadmin']
 results['recon']['paths'] = {}
 for p in common_paths:
     try:
-        req = urllib.request.Request(target.rstrip('/') + p, headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(target.rstrip('/') + p, headers={'User-Agent': ua})
         resp = urllib.request.urlopen(req, timeout=5, context=ctx)
-        results['recon']['paths'][p] = {'status': resp.status, 'size': len(resp.read())}
+        content = resp.read()
+        results['recon']['paths'][p] = {'status': resp.status, 'size': len(content)}
     except urllib.error.HTTPError as e:
         results['recon']['paths'][p] = {'status': e.code}
     except:
         pass
 
+# Goal-specific extraction
+if body:
+    if 'emails' in goals or 'everything' in goals:
+        emails = list(set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', body)))
+        results['extraction']['emails'] = emails
+
+    if 'user-accounts' in goals or 'everything' in goals:
+        # Look for login forms, user references
+        forms = re.findall(r'<form[^>]*action=["\\'](.*?)["\\'](.*?)</form>', body, re.DOTALL | re.IGNORECASE)
+        login_indicators = bool(re.search(r'(login|signin|sign-in|log-in|auth)', body, re.IGNORECASE))
+        results['extraction']['user_accounts'] = {
+            'login_forms_found': len(forms),
+            'has_login_page': login_indicators,
+            'form_actions': [f[0] for f in forms[:10]],
+        }
+
+    if 'api-keys' in goals or 'everything' in goals:
+        # Search for exposed keys/tokens in page source
+        key_patterns = [
+            (r'["\\']((?:sk|pk|api|key|token|secret|access)[_-]?[a-zA-Z0-9]{20,})["\\'\\s]', 'generic_key'),
+            (r'AIza[0-9A-Za-z_-]{35}', 'google_api_key'),
+            (r'AKIA[0-9A-Z]{16}', 'aws_access_key'),
+        ]
+        found_keys = []
+        for pattern, key_type in key_patterns:
+            matches = re.findall(pattern, body)
+            for m in matches:
+                found_keys.append({'type': key_type, 'value': m[:8] + '...' if len(m) > 8 else m})
+        results['extraction']['api_keys'] = found_keys
+
+    if 'personal-data' in goals or 'everything' in goals:
+        # Search for PII patterns
+        phones = list(set(re.findall(r'\\b(?:\\+?1[-.]?)?\\(?\\d{3}\\)?[-.]?\\d{3}[-.]?\\d{4}\\b', body)))
+        addresses = list(set(re.findall(r'\\d+\\s+[A-Za-z]+\\s+(?:St|Ave|Blvd|Dr|Rd|Ln|Way|Ct)', body)))
+        results['extraction']['personal_data'] = {
+            'phone_numbers': phones[:20],
+            'addresses': addresses[:20],
+        }
+
+    if 'files' in goals or 'everything' in goals:
+        # Find linked files
+        file_urls = list(set(re.findall(r'href=["\\'](.*?\\.(?:pdf|doc|docx|xls|xlsx|csv|sql|bak|zip|tar|gz|conf|env|log))["\\'\\s]', body, re.IGNORECASE)))
+        results['extraction']['files'] = file_urls[:50]
+
+    if 'database' in goals or 'everything' in goals:
+        # Check for database exposure indicators
+        db_indicators = {
+            'sql_errors': bool(re.search(r'(mysql|postgresql|sqlite|oracle|mssql|sql syntax|database error)', body, re.IGNORECASE)),
+            'phpMyAdmin': '/phpmyadmin' in str(results['recon'].get('paths', {})),
+            'exposed_env': '/.env' in str(results['recon'].get('paths', {})),
+        }
+        results['extraction']['database'] = db_indicators
+
+    if 'financial' in goals or 'everything' in goals:
+        # Look for payment/financial indicators
+        financial = {
+            'has_payment_forms': bool(re.search(r'(stripe|paypal|braintree|square|credit.card|payment)', body, re.IGNORECASE)),
+            'card_patterns': len(re.findall(r'\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\\b', body)),
+        }
+        results['extraction']['financial'] = financial
+
 json.dump(results, open(output, 'w'), indent=2, default=str)
-print(json.dumps({'found_paths': len([p for p in results['recon'].get('paths', {}) if results['recon']['paths'][p].get('status') == 200])}))
+summary = {
+    'found_paths': len([p for p in results['recon'].get('paths', {}) if results['recon']['paths'][p].get('status') == 200]),
+    'technologies': results['recon'].get('technologies', []),
+    'goals_processed': len([g for g in goals if g in results.get('extraction', {}) or g == 'everything']),
+    'extraction_keys': list(results.get('extraction', {}).keys()),
+}
+print(json.dumps(summary))
 `;
             const scriptPath = path.join(outputPath, '_recon.py');
             const resultPath = path.join(outputPath, 'recon_results.json');
             await fs.writeFile(scriptPath, reconScript, 'utf-8');
-            const result = await runCommand(python.path, [scriptPath, targetUrl, resultPath], { timeout: 60000 });
+            const result = await runCommand(python.path, [
+              scriptPath, targetUrl, resultPath, goalsJson, stealthMode ? 'true' : 'false',
+            ], { timeout: 120000 });
             await fs.unlink(scriptPath).catch(() => {});
             progress(progressCh, 100, 'Reconnaissance complete');
             return { success: true, outputPath: resultPath, summary: result.stdout.trim() };
@@ -1821,22 +1925,177 @@ print(json.dumps({'tested': results['tested'], 'found': len(results['found'])}))
     try {
       const python = await resolveTool('python');
       if (!python.found) return { success: false, error: 'Python required' };
-      const result = await runCommand(python.path, ['-c', `
-import urllib.request, ssl, json
+      const scanScript = `
+import urllib.request, ssl, json, sys
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
+target = sys.argv[1]
 try:
-    resp = urllib.request.urlopen("${options.targetUrl}", timeout=10, context=ctx)
+    req = urllib.request.Request(target, headers={"User-Agent": "Mozilla/5.0"})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
     print(json.dumps({"reachable": True, "status": resp.status, "server": resp.headers.get("Server", "")}))
 except Exception as e:
     print(json.dumps({"reachable": False, "error": str(e)}))
-`], { timeout: 15000 });
+`;
+      const scriptPath = path.join(require('os').tmpdir(), `_scan_${Date.now()}.py`);
+      await fs.writeFile(scriptPath, scanScript, 'utf-8');
+      const result = await runCommand(python.path, [scriptPath, options.targetUrl], { timeout: 15000 });
+      await fs.unlink(scriptPath).catch(() => {});
       return { success: true, ...JSON.parse(result.stdout.trim()) };
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }
   });
+
+  // Photon web crawler handler
+  ipcMain.handle(
+    IPC_CHANNELS.PHOTON_RUN,
+    async (_event, options: {
+      targetUrl: string;
+      outputPath: string;
+      crawlDepth?: number;
+      threads?: number;
+      extractKeys?: boolean;
+      extractDns?: boolean;
+    }) => {
+      const { targetUrl, outputPath, crawlDepth = 3, threads = 10, extractKeys = true, extractDns = false } = options;
+      const progressCh = IPC_CHANNELS.PHOTON_PROGRESS;
+
+      await ensureDir(outputPath);
+      progress(progressCh, 5, `Starting Photon crawl of ${targetUrl}`);
+
+      const python = await resolveTool('python');
+      if (!python.found) throw new Error('Python is required for Photon crawler');
+
+      try {
+        // First try using photon as a pip-installed module
+        const args = [
+          '-m', 'photon',
+          '-u', targetUrl,
+          '-o', outputPath,
+          '-l', String(crawlDepth),
+          '-t', String(threads),
+        ];
+        if (extractKeys) args.push('--keys');
+        if (extractDns) args.push('--dns');
+
+        progress(progressCh, 10, 'Running Photon web crawler...');
+        const result = await runCommand(python.path, args, { timeout: 300000 });
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          // Fallback: run an inline crawler script if photon module is not installed
+          progress(progressCh, 15, 'Photon module not found, using built-in crawler...');
+          const crawlerScript = `
+import urllib.request, urllib.error, json, sys, ssl, re, os
+from urllib.parse import urlparse, urljoin
+from collections import defaultdict
+
+target = sys.argv[1]
+output_dir = sys.argv[2]
+max_depth = int(sys.argv[3])
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+visited = set()
+results = defaultdict(set)
+parsed_target = urlparse(target)
+base_domain = parsed_target.hostname
+
+def crawl(url, depth=0):
+    if depth > max_depth or url in visited or len(visited) > 200:
+        return
+    visited.add(url)
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; Photon/RMPG)'})
+        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+        body = resp.read().decode('utf-8', errors='ignore')
+    except:
+        return
+
+    # Extract emails
+    emails = set(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', body))
+    results['emails'].update(emails)
+
+    # Extract URLs
+    urls = set(re.findall(r'href=["\\'](https?://[^"\\'>]+)', body))
+    urls.update(re.findall(r'src=["\\'](https?://[^"\\'>]+)', body))
+    for u in urls:
+        results['urls'].add(u)
+        parsed = urlparse(u)
+        if parsed.hostname == base_domain and u not in visited:
+            crawl(u, depth + 1)
+
+    # Extract internal paths
+    internal = set(re.findall(r'href=["\\'](/[^"\\'>]+)', body))
+    for p in internal:
+        full = urljoin(target, p)
+        results['internal'].add(full)
+        if full not in visited:
+            crawl(full, depth + 1)
+
+    # Extract social media links
+    social_patterns = ['facebook.com', 'twitter.com', 'linkedin.com', 'instagram.com', 'github.com', 'youtube.com']
+    for u in urls:
+        for sp in social_patterns:
+            if sp in u:
+                results['social'].add(u)
+
+    # Extract files
+    file_exts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.zip', '.sql', '.bak', '.conf', '.env', '.json', '.xml']
+    for u in urls | {urljoin(target, p) for p in internal}:
+        for ext in file_exts:
+            if u.lower().endswith(ext):
+                results['files'].add(u)
+
+crawl(target)
+
+# Convert sets to lists for JSON
+output = {
+    'target': target,
+    'pages_crawled': len(visited),
+    'emails': sorted(results['emails']),
+    'urls': sorted(list(results['urls'])[:500]),
+    'internal_paths': sorted(list(results['internal'])[:500]),
+    'social_media': sorted(results['social']),
+    'files': sorted(results['files']),
+}
+
+os.makedirs(output_dir, exist_ok=True)
+for key in ['emails', 'urls', 'internal_paths', 'social_media', 'files']:
+    filepath = os.path.join(output_dir, f'{key}.txt')
+    with open(filepath, 'w') as f:
+        f.write('\\n'.join(output[key]))
+
+with open(os.path.join(output_dir, 'crawl_results.json'), 'w') as f:
+    json.dump(output, f, indent=2)
+
+print(json.dumps({
+    'pages_crawled': output['pages_crawled'],
+    'emails_found': len(output['emails']),
+    'urls_found': len(output['urls']),
+    'files_found': len(output['files']),
+    'social_found': len(output['social_media']),
+}))
+`;
+          const scriptPath = path.join(outputPath, '_crawler.py');
+          await fs.writeFile(scriptPath, crawlerScript, 'utf-8');
+          const fallback = await runCommand(python.path, [scriptPath, targetUrl, outputPath, String(crawlDepth)], { timeout: 300000 });
+          await fs.unlink(scriptPath).catch(() => {});
+          progress(progressCh, 100, 'Crawl complete');
+          return { success: true, outputPath, summary: fallback.stdout.trim() };
+        }
+
+        progress(progressCh, 100, 'Photon crawl complete');
+        return { success: true, outputPath, summary: result.stdout.trim() };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -2346,6 +2605,158 @@ print(json.dumps({'checked': len(sites), 'found': len([r for r in results if r.g
                   (dossier.findings as Record<string, unknown>)['usernames'] = JSON.parse(await fs.readFile(resultPath, 'utf-8'));
                 } catch { /* skip */ }
               }
+              break;
+            }
+
+            case 'employment': {
+              // Employment history lookup via web OSINT
+              const empUsername = subject.username || `${subject.firstName || ''}${subject.lastName || ''}`.toLowerCase();
+              if (empUsername) {
+                const empScript = `
+import urllib.request, json, sys, ssl
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+name = sys.argv[1]
+output = sys.argv[2]
+results = []
+# Check GitHub for company/bio info
+try:
+    url = f'https://api.github.com/search/users?q={name}+type:user'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for item in data.get('items', [])[:5]:
+        try:
+            detail_req = urllib.request.Request(item['url'], headers={'User-Agent': 'RMPG/1.0'})
+            detail_resp = urllib.request.urlopen(detail_req, timeout=10, context=ctx)
+            detail = json.loads(detail_resp.read())
+            if detail.get('company') or detail.get('bio'):
+                results.append({
+                    'source': 'github',
+                    'username': detail['login'],
+                    'company': detail.get('company', ''),
+                    'bio': detail.get('bio', ''),
+                    'location': detail.get('location', ''),
+                })
+        except: pass
+except: pass
+json.dump({'results': results, 'source': 'osint'}, open(output, 'w'), indent=2)
+print(json.dumps({'found': len(results)}))
+`;
+                const scriptPath = path.join(outputPath, '_employment.py');
+                const resultPath = path.join(outputPath, 'employment_results.json');
+                await fs.writeFile(scriptPath, empScript, 'utf-8');
+                await runCommand(python.path, [scriptPath, empUsername, resultPath], { timeout: 30000 });
+                await fs.unlink(scriptPath).catch(() => {});
+                try {
+                  (dossier.findings as Record<string, unknown>)['employment'] = JSON.parse(await fs.readFile(resultPath, 'utf-8'));
+                } catch { /* skip */ }
+              } else {
+                (dossier.findings as Record<string, unknown>)['employment'] = {
+                  status: 'insufficient_input',
+                  note: 'Name or username required for employment search',
+                };
+              }
+              break;
+            }
+
+            case 'relatives': {
+              // Relatives/associates lookup
+              if (subject.firstName && subject.lastName) {
+                const relScript = `
+import urllib.request, json, sys, ssl
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+first, last, output = sys.argv[1], sys.argv[2], sys.argv[3]
+results = {'query': f'{first} {last}', 'associates': [], 'source': 'osint'}
+try:
+    url = f'https://api.github.com/search/users?q={first}+{last}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for item in data.get('items', [])[:3]:
+        try:
+            followers_req = urllib.request.Request(f'{item["url"]}/followers?per_page=5', headers={'User-Agent': 'RMPG/1.0'})
+            followers_resp = urllib.request.urlopen(followers_req, timeout=10, context=ctx)
+            followers = json.loads(followers_resp.read())
+            for f in followers:
+                results['associates'].append({'username': f['login'], 'source': 'github_follower', 'profile': f['html_url']})
+        except: pass
+except: pass
+json.dump(results, open(output, 'w'), indent=2)
+print(json.dumps({'associates_found': len(results['associates'])}))
+`;
+                const scriptPath = path.join(outputPath, '_relatives.py');
+                const resultPath = path.join(outputPath, 'relatives_results.json');
+                await fs.writeFile(scriptPath, relScript, 'utf-8');
+                await runCommand(python.path, [scriptPath, subject.firstName, subject.lastName, resultPath], { timeout: 30000 });
+                await fs.unlink(scriptPath).catch(() => {});
+                try {
+                  (dossier.findings as Record<string, unknown>)['relatives'] = JSON.parse(await fs.readFile(resultPath, 'utf-8'));
+                } catch { /* skip */ }
+              }
+              break;
+            }
+
+            case 'photos': {
+              // Photo/image search via OSINT
+              const photoName = `${subject.firstName || ''} ${subject.lastName || ''}`.trim();
+              if (photoName || subject.username) {
+                const photoScript = `
+import urllib.request, json, sys, ssl
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+query = sys.argv[1]
+output = sys.argv[2]
+results = {'query': query, 'profiles_with_photos': []}
+try:
+    url = f'https://api.github.com/search/users?q={query}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'RMPG/1.0'})
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    data = json.loads(resp.read())
+    for item in data.get('items', [])[:5]:
+        results['profiles_with_photos'].append({
+            'source': 'github',
+            'username': item['login'],
+            'avatar_url': item['avatar_url'],
+            'profile_url': item['html_url'],
+        })
+except: pass
+json.dump(results, open(output, 'w'), indent=2)
+print(json.dumps({'profiles_found': len(results['profiles_with_photos'])}))
+`;
+                const scriptPath = path.join(outputPath, '_photos.py');
+                const resultPath = path.join(outputPath, 'photos_results.json');
+                await fs.writeFile(scriptPath, photoScript, 'utf-8');
+                await runCommand(python.path, [scriptPath, subject.username || photoName, resultPath], { timeout: 30000 });
+                await fs.unlink(scriptPath).catch(() => {});
+                try {
+                  (dossier.findings as Record<string, unknown>)['photos'] = JSON.parse(await fs.readFile(resultPath, 'utf-8'));
+                } catch { /* skip */ }
+              }
+              break;
+            }
+
+            case 'criminal':
+            case 'vehicles':
+            case 'property':
+            case 'education':
+            case 'financial':
+            case 'travel':
+            case 'devices':
+            case 'ip-addresses': {
+              // These data points require authorized database access
+              (dossier.findings as Record<string, unknown>)[dataPoint] = {
+                status: 'requires_authorized_database',
+                note: `${dataPoint} lookup requires connection to authorized records system (e.g., NCIC, DMV, court records)`,
+                subject_info: {
+                  name: `${subject.firstName || ''} ${subject.lastName || ''}`.trim() || undefined,
+                  dob: subject.dob || undefined,
+                },
+              };
               break;
             }
 

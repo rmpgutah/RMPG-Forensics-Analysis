@@ -239,11 +239,11 @@ function registerToolkitRunHandler(): void {
         return { success: false, error: `Unknown tool: ${toolId}` };
       }
 
-      // Input validation: reject shell metacharacters in target
+      // Input validation: reject shell metacharacters in target (allow - . : / @ for URLs/domains)
       if (/[;&|`$(){}!#*<>\\\n\r]/.test(target)) {
         return { success: false, error: 'Target contains invalid characters' };
       }
-      // Validate extraArgs: reject anything that looks like shell injection
+      // Validate extraArgs: reject shell injection but allow common flag characters
       for (const arg of extraArgs) {
         if (/[;&|`$(){}!#*<>\\\n\r]/.test(arg)) {
           return { success: false, error: 'Extra arguments contain invalid characters' };
