@@ -236,12 +236,12 @@ export const PythonToolkit: React.FC = () => {
           </div>
 
           {/* Progress */}
-          <ProgressIndicator process={process} />
+          <ProgressIndicator percent={process.progress.percent} message={process.progress.message} isRunning={process.isRunning} />
         </div>
       )}
 
       {/* Log Console */}
-      <LogConsole process={process} />
+      <LogConsole logs={process.logs} onClear={process.clearLogs} />
 
       {/* Legal Notice */}
       <div className="rounded-lg border border-yellow-700/50 bg-yellow-900/20 p-3 text-sm text-yellow-300">

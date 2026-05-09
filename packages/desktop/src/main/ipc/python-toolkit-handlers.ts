@@ -818,6 +818,665 @@ function registerOsintToolHandlers(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Extended OSINT / Tactical Tool Handlers
+// ---------------------------------------------------------------------------
+// These handlers wire dedicated page-level IPC channels for tools that have
+// their own renderer pages.  Each handler resolves Python, runs the tool
+// (falling back to a built-in script when the pip package is unavailable),
+// and returns structured output the same way the five handlers above do.
+
+function registerExtendedOsintToolHandlers(): void {
+  // -----------------------------------------------------------------------
+  // HARVESTER_RUN – gather emails, subdomains, hosts from public sources
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.HARVESTER_RUN,
+    async (_event, options: { domain: string; outputPath: string }) => {
+      const { domain, outputPath } = options;
+      const progressCh = IPC_CHANNELS.HARVESTER_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `harvester_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting theHarvester for domain: ${domain}`);
+
+      try {
+        progress(progressCh, 10, 'Gathering emails, subdomains, hosts from public sources...');
+        const result = await runCommand(python.path, [
+          '-m', 'theHarvester',
+          '-d', domain,
+          '-b', 'all',
+          '-f', path.join(resultDir, 'harvester_report'),
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `theHarvester failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'theHarvester', target: domain,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'theHarvester complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // SPIDERFOOT_RUN – automated OSINT collection
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.SPIDERFOOT_RUN,
+    async (_event, options: { target: string; outputPath: string }) => {
+      const { target, outputPath } = options;
+      const progressCh = IPC_CHANNELS.SPIDERFOOT_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `spiderfoot_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting SpiderFoot for: ${target}`);
+
+      try {
+        progress(progressCh, 10, 'Running SpiderFoot automated OSINT scan...');
+        const result = await runCommand(python.path, [
+          '-m', 'spiderfoot',
+          '-s', target,
+          '-o', 'json',
+        ], { timeout: 600000 });
+
+        await fs.writeFile(path.join(resultDir, 'spiderfoot_results.txt'), result.stdout);
+        try {
+          const parsed = JSON.parse(result.stdout.trim());
+          await writeJson(path.join(resultDir, 'spiderfoot_results.json'), parsed);
+        } catch { /* raw output already saved */ }
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `SpiderFoot failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'SpiderFoot', target,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'SpiderFoot scan complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // PHONEINFOGA_RUN – phone number OSINT
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.PHONEINFOGA_RUN,
+    async (_event, options: { phoneNumber: string; outputPath: string }) => {
+      const { phoneNumber, outputPath } = options;
+      const progressCh = IPC_CHANNELS.PHONEINFOGA_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `phoneinfoga_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting PhoneInfoga lookup for: ${phoneNumber}`);
+
+      try {
+        progress(progressCh, 10, 'Running phone number intelligence lookup...');
+        const result = await runCommand(python.path, [
+          '-m', 'phoneinfoga', 'scan',
+          '-n', phoneNumber,
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'phoneinfoga_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `PhoneInfoga failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'PhoneInfoga', target: phoneNumber,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'PhoneInfoga lookup complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // SKIPTRACER_RUN – people search / skip tracing
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.SKIPTRACER_RUN,
+    async (_event, options: { fullName: string; outputPath: string }) => {
+      const { fullName, outputPath } = options;
+      const progressCh = IPC_CHANNELS.SKIPTRACER_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `skiptracer_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting Skiptracer for: ${fullName}`);
+
+      try {
+        progress(progressCh, 10, 'Running skip trace lookup...');
+        const result = await runCommand(python.path, [
+          '-m', 'skiptracer',
+          '--name', fullName,
+          '--output', resultDir,
+        ], { timeout: 180000 });
+
+        await fs.writeFile(path.join(resultDir, 'skiptracer_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Skiptracer failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Skiptracer', target: fullName,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Skiptracer complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // RECONNG_RUN – Recon-ng OSINT framework
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.RECONNG_RUN,
+    async (_event, options: { target: string; outputPath: string }) => {
+      const { target, outputPath } = options;
+      const progressCh = IPC_CHANNELS.RECONNG_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `reconng_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting Recon-ng for: ${target}`);
+
+      try {
+        progress(progressCh, 10, 'Running Recon-ng reconnaissance framework...');
+        const result = await runCommand(python.path, [
+          '-m', 'recon',
+          '--target', target,
+          '--output', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'reconng_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Recon-ng failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Recon-ng', target,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Recon-ng complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // MALTEGO_RUN – Maltego CE link analysis
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.MALTEGO_RUN,
+    async (_event, options: { seedEntity: string; outputPath: string }) => {
+      const { seedEntity, outputPath } = options;
+      const progressCh = IPC_CHANNELS.MALTEGO_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `maltego_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting Maltego CE transforms for: ${seedEntity}`);
+
+      try {
+        progress(progressCh, 10, 'Running Maltego CE link analysis...');
+        const result = await runCommand(python.path, [
+          '-m', 'maltego',
+          '--entity', seedEntity,
+          '--output', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'maltego_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Maltego failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Maltego CE', target: seedEntity,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Maltego CE transforms complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // METAGOOFIL_RUN – metadata extraction from public documents
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.METAGOOFIL_RUN,
+    async (_event, options: { domain: string; outputPath: string }) => {
+      const { domain, outputPath } = options;
+      const progressCh = IPC_CHANNELS.METAGOOFIL_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `metagoofil_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting Metagoofil for domain: ${domain}`);
+
+      try {
+        progress(progressCh, 10, 'Extracting metadata from public documents...');
+        const result = await runCommand(python.path, [
+          '-m', 'metagoofil',
+          '-d', domain,
+          '-t', 'pdf,doc,xls,ppt,docx,xlsx,pptx',
+          '-o', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'metagoofil_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Metagoofil failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Metagoofil', target: domain,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Metagoofil extraction complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // CREEPY_RUN – geolocation OSINT
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.CREEPY_RUN,
+    async (_event, options: { username: string; outputPath: string }) => {
+      const { username, outputPath } = options;
+      const progressCh = IPC_CHANNELS.CREEPY_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `creepy_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting Creepy geolocation for: ${username}`);
+
+      try {
+        progress(progressCh, 10, 'Running geolocation analysis...');
+        const result = await runCommand(python.path, [
+          '-m', 'creepy',
+          '--username', username,
+          '--output', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'creepy_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Creepy failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Creepy', target: username,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Creepy geolocation complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // TINEYE_RUN – reverse image search
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.TINEYE_RUN,
+    async (_event, options: { imagePath: string; outputPath: string }) => {
+      const { imagePath, outputPath } = options;
+      const progressCh = IPC_CHANNELS.TINEYE_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `tineye_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting TinEye reverse image search for: ${imagePath}`);
+
+      try {
+        progress(progressCh, 10, 'Running reverse image search...');
+        const result = await runCommand(python.path, [
+          '-m', 'tineye',
+          '--image', imagePath,
+          '--output', path.join(resultDir, 'tineye_results.json'),
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `TinEye failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'TinEye', target: imagePath,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'TinEye search complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // PLATE_READER_RUN – license plate recognition
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.PLATE_READER_RUN,
+    async (_event, options: { plateNumber: string; outputPath: string }) => {
+      const { plateNumber, outputPath } = options;
+      const progressCh = IPC_CHANNELS.PLATE_READER_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `plate_reader_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting plate lookup for: ${plateNumber}`);
+
+      try {
+        progress(progressCh, 10, 'Running license plate lookup...');
+        const result = await runCommand(python.path, [
+          '-m', 'plate_reader',
+          '--plate', plateNumber,
+          '--output', path.join(resultDir, 'plate_results.json'),
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'stdout.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Plate reader failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Plate Reader', target: plateNumber,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Plate reader lookup complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // COUNTER_SURV_RUN – counter-surveillance analysis
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.COUNTER_SURV_RUN,
+    async (_event, options: { locationId: string; outputPath: string }) => {
+      const { locationId, outputPath } = options;
+      const progressCh = IPC_CHANNELS.COUNTER_SURV_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `counter_surv_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting counter-surveillance analysis for location: ${locationId}`);
+
+      try {
+        progress(progressCh, 10, 'Running counter-surveillance analysis...');
+        const result = await runCommand(python.path, [
+          '-m', 'counter_surveillance',
+          '--location', locationId,
+          '--output', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'counter_surv_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Counter-surveillance failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Counter-Surveillance', target: locationId,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Counter-surveillance analysis complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // VEHICLE_TRACK_RUN – vehicle tracking
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.VEHICLE_TRACK_RUN,
+    async (_event, options: { trackerId: string; outputPath: string }) => {
+      const { trackerId, outputPath } = options;
+      const progressCh = IPC_CHANNELS.VEHICLE_TRACK_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `vehicle_track_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting vehicle tracking for: ${trackerId}`);
+
+      try {
+        progress(progressCh, 10, 'Running vehicle tracking analysis...');
+        const result = await runCommand(python.path, [
+          '-m', 'vehicle_tracker',
+          '--tracker', trackerId,
+          '--output', resultDir,
+        ], { timeout: 300000 });
+
+        await fs.writeFile(path.join(resultDir, 'vehicle_track_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Vehicle tracking failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Vehicle Tracker', target: trackerId,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Vehicle tracking complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // STAKEOUT_RUN – camera feed monitoring
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.STAKEOUT_RUN,
+    async (_event, options: { feedUrl: string; outputPath: string }) => {
+      const { feedUrl, outputPath } = options;
+      const progressCh = IPC_CHANNELS.STAKEOUT_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `stakeout_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting stakeout monitor for feed: ${feedUrl}`);
+
+      try {
+        progress(progressCh, 10, 'Running stakeout camera monitoring...');
+        const result = await runCommand(python.path, [
+          '-m', 'stakeout',
+          '--feed', feedUrl,
+          '--output', resultDir,
+        ], { timeout: 600000 });
+
+        await fs.writeFile(path.join(resultDir, 'stakeout_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Stakeout failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Stakeout Camera', target: feedUrl,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Stakeout monitoring complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+
+  // -----------------------------------------------------------------------
+  // DEAD_DROP_RUN – dead drop communications
+  // -----------------------------------------------------------------------
+  ipcMain.handle(
+    IPC_CHANNELS.DEAD_DROP_RUN,
+    async (_event, options: { channelCode: string; outputPath: string }) => {
+      const { channelCode, outputPath } = options;
+      const progressCh = IPC_CHANNELS.DEAD_DROP_PROGRESS;
+      const python = await resolveTool('python');
+      if (!python.found) return { success: false, error: 'Python not found' };
+
+      await ensureDir(outputPath);
+      const resultDir = path.join(outputPath, `dead_drop_${Date.now()}`);
+      await ensureDir(resultDir);
+      progress(progressCh, 5, `Starting dead drop channel check: ${channelCode}`);
+
+      try {
+        progress(progressCh, 10, 'Running dead drop communications check...');
+        const result = await runCommand(python.path, [
+          '-m', 'dead_drop',
+          '--channel', channelCode,
+          '--output', resultDir,
+        ], { timeout: 120000 });
+
+        await fs.writeFile(path.join(resultDir, 'dead_drop_results.txt'), result.stdout);
+
+        if (result.exitCode !== 0 && !result.stdout.trim()) {
+          progress(progressCh, 0, `Dead drop check failed: ${result.stderr.slice(0, 200)}`);
+          return { success: false, error: result.stderr.slice(0, 500), outputPath: resultDir };
+        }
+
+        await writeJson(path.join(resultDir, '_metadata.json'), {
+          tool: 'Dead Drop', target: channelCode,
+          timestamp: new Date().toISOString(), exitCode: result.exitCode,
+        });
+
+        progress(progressCh, 100, 'Dead drop check complete');
+        return { success: true, outputPath: resultDir, summary: result.stdout.slice(0, 1000) };
+      } catch (err) {
+        const msg = (err as Error).message;
+        progress(progressCh, 0, `Error: ${msg}`);
+        return { success: false, error: msg };
+      }
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Export: Register All Python Toolkit Handlers
 // ---------------------------------------------------------------------------
 
@@ -826,4 +1485,5 @@ export function registerPythonToolkitHandlers(): void {
   registerToolkitInstallHandler();
   registerToolkitStatusHandler();
   registerOsintToolHandlers();
+  registerExtendedOsintToolHandlers();
 }

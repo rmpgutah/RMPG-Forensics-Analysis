@@ -137,6 +137,92 @@ const INSTALL_RECIPES: Record<string, ToolInstallInfo> = {
     win32: { type: 'url', url: 'https://github.com/skylot/jadx/releases', label: 'JADX GitHub releases' },
     note: 'JADX decompiler — for APK analysis',
   },
+
+  // Python Security Toolkit — OSINT, Recon, Web & Crypto tools (pip-installed)
+  sherlock: {
+    darwin: { type: 'pip', package: 'sherlock-project' },
+    linux: { type: 'pip', package: 'sherlock-project' },
+    win32: { type: 'pip', package: 'sherlock-project' },
+    note: 'Sherlock — hunt usernames across 400+ social networks. Requires Python.',
+  },
+  theharvester: {
+    darwin: { type: 'pip', package: 'theHarvester' },
+    linux: { type: 'pip', package: 'theHarvester' },
+    win32: { type: 'pip', package: 'theHarvester' },
+    note: 'theHarvester — gather emails, subdomains, hosts from public sources. Requires Python.',
+  },
+  holehe: {
+    darwin: { type: 'pip', package: 'holehe' },
+    linux: { type: 'pip', package: 'holehe' },
+    win32: { type: 'pip', package: 'holehe' },
+    note: 'Holehe — check email registration across 120+ sites. Requires Python.',
+  },
+  photon: {
+    darwin: { type: 'pip', package: 'photon' },
+    linux: { type: 'pip', package: 'photon' },
+    win32: { type: 'pip', package: 'photon' },
+    note: 'Photon — fast web crawler for URLs, emails, secrets. Requires Python.',
+  },
+  sublist3r: {
+    darwin: { type: 'pip', package: 'sublist3r' },
+    linux: { type: 'pip', package: 'sublist3r' },
+    win32: { type: 'pip', package: 'sublist3r' },
+    note: 'Sublist3r — subdomain enumeration via OSINT. Requires Python.',
+  },
+  socialscan: {
+    darwin: { type: 'pip', package: 'socialscan' },
+    linux: { type: 'pip', package: 'socialscan' },
+    win32: { type: 'pip', package: 'socialscan' },
+    note: 'Social Scan — email/username availability checker. Requires Python.',
+  },
+  hashid: {
+    darwin: { type: 'pip', package: 'hashid' },
+    linux: { type: 'pip', package: 'hashid' },
+    win32: { type: 'pip', package: 'hashid' },
+    note: 'Hash Identifier — identify hash types (MD5, SHA, bcrypt, etc.). Requires Python.',
+  },
+  dirsearch: {
+    darwin: { type: 'pip', package: 'dirsearch' },
+    linux: { type: 'pip', package: 'dirsearch' },
+    win32: { type: 'pip', package: 'dirsearch' },
+    note: 'Dirsearch — web path/directory brute-forcer. Requires Python.',
+  },
+  wafw00f: {
+    darwin: { type: 'pip', package: 'wafw00f' },
+    linux: { type: 'pip', package: 'wafw00f' },
+    win32: { type: 'pip', package: 'wafw00f' },
+    note: 'WAFw00f — identify and fingerprint Web Application Firewalls. Requires Python.',
+  },
+  xsstrike: {
+    darwin: { type: 'pip', package: 'xsstrike' },
+    linux: { type: 'pip', package: 'xsstrike' },
+    win32: { type: 'pip', package: 'xsstrike' },
+    note: 'XSStrike — advanced XSS detection suite. Requires Python.',
+  },
+  cloud_enum: {
+    darwin: { type: 'pip', package: 'cloud_enum' },
+    linux: { type: 'pip', package: 'cloud_enum' },
+    win32: { type: 'pip', package: 'cloud_enum' },
+    note: 'Cloud Enum — enumerate public cloud resources (AWS/Azure/GCP). Requires Python.',
+  },
+  maigret: {
+    darwin: { type: 'pip', package: 'maigret' },
+    linux: { type: 'pip', package: 'maigret' },
+    win32: { type: 'pip', package: 'maigret' },
+    note: 'Maigret — deep username search across 2500+ sites. Requires Python.',
+  },
+  fierce: {
+    darwin: { type: 'pip', package: 'fierce' },
+    linux: { type: 'pip', package: 'fierce' },
+    win32: { type: 'pip', package: 'fierce' },
+    note: 'Fierce — DNS reconnaissance tool. Requires Python.',
+  },
+  dorkseye: {
+    darwin: { type: 'pip', package: 'dorkseye' },
+    linux: { type: 'pip', package: 'dorkseye' },
+    win32: { type: 'pip', package: 'dorkseye' },
+    note: 'DorksEye — Google Dorks automation. Requires Python.',
+  },
 };
 
 /**

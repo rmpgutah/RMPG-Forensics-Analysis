@@ -46,7 +46,7 @@ function fmtTime(seconds: number): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
-  percent,
+  percent: rawPercent,
   message,
   isRunning = false,
   showPercentage = true,
@@ -59,6 +59,8 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   filesCount,
   totalFiles,
 }) => {
+  // Guard against NaN / undefined / Infinity so the UI never shows "NaN%".
+  const percent = Number.isFinite(rawPercent) ? rawPercent : 0;
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef<number | null>(null);
 
