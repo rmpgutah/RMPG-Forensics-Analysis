@@ -89,9 +89,172 @@ export function registerInstagramHandlers(): void {
       // Resolve instaloader
       const instaloaderTool = await resolveTool('instaloader');
       if (!instaloaderTool.found) {
-        throw new Error(
-          'Instaloader not found. Please install it (pip install instaloader) and configure the path in Settings.'
-        );
+        // Fallback: scrape public profile data via HTTP without instaloader
+        sendProgress('Instaloader not found — using credential-free HTTP scraper for public data...');
+        const pythonTool = await resolveTool('python');
+        if (!pythonTool.found) {
+          throw new Error(
+            'Neither Instaloader nor Python found. Install one to scrape Instagram profiles.'
+          );
+        }
+
+        const fallbackScript = `
+import urllib.request, json, sys, ssl, re, os
+
+target_user = sys.argv[1]
+output_dir = sys.argv[2]
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+results = {'target': target_user, 'method': 'http-public-scrape', 'profile': {}, 'posts': [], 'links': []}
+os.makedirs(output_dir, exist_ok=True)
+
+# Try to fetch public profile page (no login needed for public profiles)
+profile_url = f'https://www.instagram.com/{target_user}/'
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Fetch-Mode': 'navigate',
+}
+
+try:
+    req = urllib.request.Request(profile_url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=15, context=ctx)
+    body = resp.read().decode('utf-8', errors='ignore')
+
+    # Extract metadata from page source
+    # Open Graph and meta tags
+    og_data = {}
+    for meta in re.findall(r'<meta\\s+([^>]+)/?>', body, re.IGNORECASE):
+        prop = re.search(r'property=["\\'](og:[^"\\'>]+)["\\'\\s]', meta)
+        content = re.search(r'content=["\\'](.*?)["\\'\\s]', meta)
+        if prop and content:
+            og_data[prop.group(1)] = content.group(1)
+        name = re.search(r'name=["\\'](.*?)["\\'\\s]', meta)
+        if name and content:
+            og_data[name.group(1)] = content.group(1)
+
+    results['profile']['og_data'] = og_data
+    results['profile']['title'] = og_data.get('og:title', '')
+    results['profile']['description'] = og_data.get('og:description', og_data.get('description', ''))
+    results['profile']['image'] = og_data.get('og:image', '')
+    results['profile']['url'] = profile_url
+
+    # Try to find JSON-LD structured data
+    for ld_match in re.findall(r'<script\\s+type=["\\'"]application/ld\\+json["\\'"][^>]*>(.*?)</script>', body, re.DOTALL):
+        try:
+            ld_data = json.loads(ld_match)
+            if isinstance(ld_data, dict):
+                results['profile']['structured_data'] = {
+                    'type': ld_data.get('@type', ''),
+                    'name': ld_data.get('name', ''),
+                    'description': ld_data.get('description', ''),
+                    'url': ld_data.get('url', ''),
+                    'image': ld_data.get('image', ''),
+                }
+                if 'mainEntityofPage' in ld_data:
+                    results['profile']['structured_data']['mainEntity'] = str(ld_data['mainEntityofPage'])[:200]
+                if 'interactionStatistic' in ld_data:
+                    stats = ld_data['interactionStatistic']
+                    if isinstance(stats, list):
+                        for s in stats:
+                            stype = s.get('interactionType', {})
+                            if isinstance(stype, dict):
+                                results['profile']['structured_data'][stype.get('@type', 'stat')] = s.get('userInteractionCount', 0)
+        except Exception: pass
+
+    # Extract any embedded JSON data (shared_data, additional_data)
+    for json_match in re.findall(r'window\\._sharedData\\s*=\\s*(\\{.*?\\});', body, re.DOTALL):
+        try:
+            shared = json.loads(json_match)
+            if 'entry_data' in shared:
+                profile_page = shared.get('entry_data', {}).get('ProfilePage', [{}])
+                if profile_page:
+                    user_data = profile_page[0].get('graphql', {}).get('user', {})
+                    if user_data:
+                        results['profile']['username'] = user_data.get('username', '')
+                        results['profile']['full_name'] = user_data.get('full_name', '')
+                        results['profile']['biography'] = user_data.get('biography', '')
+                        results['profile']['external_url'] = user_data.get('external_url', '')
+                        results['profile']['followers'] = user_data.get('edge_followed_by', {}).get('count', 0)
+                        results['profile']['following'] = user_data.get('edge_follow', {}).get('count', 0)
+                        results['profile']['posts_count'] = user_data.get('edge_owner_to_timeline_media', {}).get('count', 0)
+                        results['profile']['is_private'] = user_data.get('is_private', False)
+                        results['profile']['is_verified'] = user_data.get('is_verified', False)
+                        results['profile']['profile_pic_url'] = user_data.get('profile_pic_url_hd', '')
+                        results['profile']['business_category'] = user_data.get('business_category_name', '')
+                        results['profile']['category'] = user_data.get('category_name', '')
+
+                        # Extract post data if public
+                        edges = user_data.get('edge_owner_to_timeline_media', {}).get('edges', [])
+                        for edge in edges[:12]:
+                            node = edge.get('node', {})
+                            post = {
+                                'shortcode': node.get('shortcode', ''),
+                                'timestamp': node.get('taken_at_timestamp', 0),
+                                'caption': (node.get('edge_media_to_caption', {}).get('edges', [{}])[0].get('node', {}).get('text', '') if node.get('edge_media_to_caption', {}).get('edges') else ''),
+                                'likes': node.get('edge_liked_by', {}).get('count', 0),
+                                'comments': node.get('edge_media_to_comment', {}).get('count', 0),
+                                'is_video': node.get('is_video', False),
+                                'display_url': node.get('display_url', ''),
+                                'accessibility_caption': node.get('accessibility_caption', ''),
+                            }
+                            if node.get('location'):
+                                post['location'] = node['location'].get('name', '')
+                            results['posts'].append(post)
+        except Exception: pass
+
+    # Extract any links found on the page
+    all_urls = re.findall(r'https?://[^"\\'>\\s]+', body)
+    external = set()
+    for u in all_urls:
+        if 'instagram.com' not in u and 'facebook.com' not in u and 'fbcdn' not in u:
+            external.add(u[:200])
+    results['links'] = sorted(external)[:50]
+
+    results['scrape_status'] = 'success'
+    results['note'] = 'Scraped using credential-free HTTP access. Only public data is available.'
+
+except urllib.error.HTTPError as e:
+    results['scrape_status'] = 'error'
+    results['error'] = f'HTTP {e.code}: Profile may be private or not exist'
+except Exception as e:
+    results['scrape_status'] = 'error'
+    results['error'] = str(e)
+
+# Save results
+output_file = os.path.join(output_dir, f'{target_user}_profile.json')
+json.dump(results, open(output_file, 'w'), indent=2, default=str)
+print(json.dumps({
+    'status': results['scrape_status'],
+    'has_profile': bool(results['profile']),
+    'posts_found': len(results['posts']),
+    'links_found': len(results['links']),
+}))
+`;
+
+        const scriptPath = path.join(outputDir, '_ig_fallback.py');
+        await fs.writeFile(scriptPath, fallbackScript, 'utf-8');
+
+        const { runCommand: runCmd } = await import('../services/process-runner');
+        const fallbackResult = await runCmd(pythonTool.path, [scriptPath, target, outputDir], { timeout: 30000 });
+        await fs.unlink(scriptPath).catch(() => {});
+
+        sendProgress('Public profile scrape complete (credential-free).');
+
+        let summary: Record<string, unknown> = {};
+        try { summary = JSON.parse(fallbackResult.stdout.trim()); } catch {}
+
+        return {
+          success: true,
+          outputDir,
+          filesDownloaded: 1,
+          exitCode: 0,
+          method: 'http-fallback',
+          summary,
+        };
       }
 
       await fs.mkdir(outputDir, { recursive: true });

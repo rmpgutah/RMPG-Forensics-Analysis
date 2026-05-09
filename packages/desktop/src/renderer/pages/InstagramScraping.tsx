@@ -138,7 +138,7 @@ export const InstagramScraping: React.FC = () => {
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-300">
-              Login Username <span className="text-xs text-slate-500">(required by Instagram)</span>
+              Login Username <span className="text-xs text-slate-500">(optional — needed only for private/protected profiles)</span>
             </label>
             <input
               type="text"
@@ -302,8 +302,9 @@ export const InstagramScraping: React.FC = () => {
             <h4 className="mb-2 text-sm font-medium text-white">About Instaloader</h4>
             <p className="text-xs text-slate-400">
               Instaloader is used to download public profile data including posts,
-              stories, highlights, and metadata. Ensure Instaloader is installed and
-              accessible via the configured path.
+              stories, highlights, and metadata. If Instaloader is not installed,
+              a built-in HTTP scraper will extract publicly available profile data
+              without requiring any credentials or tools.
             </p>
           </div>
         </div>

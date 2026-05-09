@@ -13,12 +13,12 @@ import { useProcess } from '../hooks';
 const PII_SOURCES = [
   { value: 'device-full', label: 'Connected Device (Full Scan)', description: 'Extract all PII from connected mobile device — contacts, accounts, messages, etc.' },
   { value: 'device-targeted', label: 'Connected Device (Targeted)', description: 'Search device for specific PII patterns (SSN, credit cards, emails, phones).' },
-  { value: 'web-osint', label: 'Web OSINT Lookup', description: 'Search public sources, social media, and data breach databases for target PII.' },
-  { value: 'email-enum', label: 'Email Enumeration', description: 'Discover email addresses associated with a domain or individual.' },
-  { value: 'social-profile', label: 'Social Media Profiling', description: 'Aggregate social media profiles and public posts for a target identity.' },
+  { value: 'web-osint', label: 'Web OSINT Lookup', description: 'Search public sources, social media, and data breach databases — no credentials required.' },
+  { value: 'email-enum', label: 'Email Enumeration', description: 'Discover email addresses via DNS MX records and common patterns — no credentials required.' },
+  { value: 'social-profile', label: 'Social Media Profiling', description: 'Aggregate public social profiles from GitHub, Reddit, and more — no credentials required.' },
   { value: 'breach-check', label: 'Breach Database Search', description: 'Check if target emails/accounts appear in known data breaches.' },
-  { value: 'phone-lookup', label: 'Phone Number Intelligence', description: 'Reverse lookup phone numbers for owner info, carrier, and location data.' },
-  { value: 'domain-whois', label: 'Domain/IP Intelligence', description: 'WHOIS, DNS records, hosting info, and historical ownership data.' },
+  { value: 'phone-lookup', label: 'Phone Number Intelligence', description: 'Parse and validate phone numbers with carrier and region info — no credentials required.' },
+  { value: 'domain-whois', label: 'Domain/IP Intelligence', description: 'DNS records, MX, NS, IP resolution, and hosting info — no credentials required.' },
   { value: 'document-scan', label: 'Document PII Scan', description: 'Scan extracted documents/images for PII (OCR + pattern matching).' },
 ] as const;
 
@@ -95,6 +95,17 @@ export const PiiPolling: React.FC = () => {
             All operations must comply with applicable privacy laws and require proper legal
             authority. Extracted data must be handled according to chain-of-custody requirements.
             Unauthorized collection of PII is illegal.
+          </span>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-blue-700/30 bg-blue-900/10 p-3 text-sm text-blue-300">
+        <div className="flex items-start gap-2">
+          <Search size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <strong>No credentials needed:</strong> Online intelligence sources (OSINT, email
+            enumeration, social profiling, phone lookup, domain/IP) use publicly accessible
+            data and do not require login credentials or API keys.
           </span>
         </div>
       </div>

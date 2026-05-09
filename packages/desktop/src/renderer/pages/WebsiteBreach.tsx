@@ -27,7 +27,10 @@ const DATA_GOALS = [
   { id: 'emails', label: 'Email Addresses', description: 'All email addresses from the target' },
   { id: 'api-keys', label: 'API Keys & Secrets', description: 'Exposed API keys, tokens, credentials' },
   { id: 'files', label: 'Sensitive Files', description: 'Config files, backups, documents' },
-  { id: 'everything', label: 'Everything Available', description: 'Run all extraction methods' },
+  { id: 'metadata', label: 'Metadata & Headers', description: 'Page metadata, open graph tags, server headers — no credentials needed' },
+  { id: 'social-links', label: 'Social Links & Profiles', description: 'Social media accounts linked on the site — no credentials needed' },
+  { id: 'sitemap', label: 'Linked Pages & Sitemap', description: 'Internal/external links, JS sources, API endpoints — no credentials needed' },
+  { id: 'everything', label: 'Everything Available', description: 'Run all extraction methods — no credentials required for most data' },
 ];
 
 export const WebsiteBreach: React.FC = () => {
