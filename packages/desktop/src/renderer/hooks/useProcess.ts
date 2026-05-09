@@ -51,7 +51,7 @@ interface UseProcessResult {
  * percent/bytes unchanged so the bar doesn't jump to 0.
  */
 function parseProgressEvent(raw: Record<string, unknown>, prev: ProcessState): ProcessState {
-  if (typeof raw.percent === 'number') {
+  if (typeof raw.percent === 'number' && Number.isFinite(raw.percent as number)) {
     // Rich format
     return {
       percent: raw.percent as number,
