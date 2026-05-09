@@ -145,7 +145,7 @@ export const PythonToolkit: React.FC = () => {
           const status = toolStatuses[tool.id];
           const isInstalled = status?.installed;
           const isSelected = selectedTool === tool.id;
-          const statusLoaded = Object.keys(toolStatuses).length > 0;
+          const hasToolStatuses = Object.keys(toolStatuses).length > 0;
 
           return (
             <button
@@ -168,7 +168,7 @@ export const PythonToolkit: React.FC = () => {
                   <p className="mt-1 text-xs text-gray-400">{tool.description}</p>
                 </div>
                 <div className="ml-2 shrink-0">
-                  {loadingStatus && !statusLoaded ? (
+                  {loadingStatus && !hasToolStatuses ? (
                     <RefreshCw size={14} className="animate-spin text-gray-500" />
                   ) : isInstalled ? (
                     <CheckCircle size={14} className="text-green-400" />
