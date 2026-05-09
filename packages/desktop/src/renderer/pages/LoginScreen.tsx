@@ -77,6 +77,10 @@ export const LoginScreen: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) return;
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
     setBusy(true);
     setError('');
     const result = await createUser(username.trim(), password);
@@ -139,12 +143,12 @@ export const LoginScreen: React.FC = () => {
 
   if (phase === 'loading') {
     return (
-      <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-[#0a1828]">
+      <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-[#0a1828]" role="main" aria-label="Loading">
         <BackgroundFx />
         <Forensic3DScene />
         <HudOverlay />
-        <div className="relative flex flex-col items-center gap-3 text-white">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-[#6495ED]" />
+        <div className="relative flex flex-col items-center gap-3 text-white" aria-live="polite">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-[#6495ED]" role="status" aria-label="Loading" />
           <div className="text-sm tracking-widest text-gray-400">INITIALIZING</div>
         </div>
       </div>
@@ -152,7 +156,7 @@ export const LoginScreen: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-[#0a1828]">
+    <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-[#0a1828]" role="main" aria-label="Authentication">
       <BackgroundFx />
       <Forensic3DScene />
       <HudOverlay />
@@ -194,27 +198,35 @@ export const LoginScreen: React.FC = () => {
                 Set up your first account. 2FA will be required on login.
               </p>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">Username</label>
+                <label htmlFor="create-username" className="mb-1 block text-xs font-medium text-gray-400">Username</label>
                 <input
+                  id="create-username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-[#6495ED] focus:ring-1 focus:ring-[#6495ED]"
                   placeholder="admin"
+                  autoComplete="username"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">Password</label>
+                <label htmlFor="create-password" className="mb-1 block text-xs font-medium text-gray-400">Password</label>
                 <input
+                  id="create-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-gray-500 outline-none focus:border-[#6495ED] focus:ring-1 focus:ring-[#6495ED]"
                   placeholder="Enter password"
+                  autoComplete="new-password"
+                  minLength={8}
                 />
+                {password.length > 0 && password.length < 8 && (
+                  <p role="alert" className="mt-1 text-xs text-yellow-400">Password must be at least 8 characters</p>
+                )}
               </div>
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
               <button
                 type="submit"
                 disabled={busy || !username.trim() || !password.trim()}
@@ -234,34 +246,38 @@ export const LoginScreen: React.FC = () => {
                 <h2 className="text-lg font-semibold text-white">Sign In</h2>
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Username</label>
+                <label htmlFor="login-username" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Username</label>
                 <div className="relative">
-                  <User size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <User size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                   <input
+                    id="login-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-white placeholder-gray-500 outline-none transition focus:border-[#6495ED] focus:bg-white/10 focus:ring-2 focus:ring-[#6495ED]/30"
                     placeholder="Username"
+                    autoComplete="username"
                     autoFocus
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Password</label>
+                <label htmlFor="login-password" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Password</label>
                 <div className="relative">
-                  <LockIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <LockIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                   <input
+                    id="login-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full rounded-lg border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-white placeholder-gray-500 outline-none transition focus:border-[#6495ED] focus:bg-white/10 focus:ring-2 focus:ring-[#6495ED]/30"
                     placeholder="Password"
+                    autoComplete="current-password"
                   />
                 </div>
               </div>
               {error && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   {error}
                 </div>
               )}
@@ -303,20 +319,24 @@ export const LoginScreen: React.FC = () => {
                 Account: RMPG Forensics — {currentUser}
               </p>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-400">
+                <label htmlFor="setup-totp" className="mb-1 block text-xs font-medium text-gray-400">
                   Enter 6-digit code from authenticator
                 </label>
                 <input
+                  id="setup-totp"
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={totpToken}
                   onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-gray-500 outline-none focus:border-[#6495ED] focus:ring-1 focus:ring-[#6495ED]"
                   placeholder="000000"
                   maxLength={6}
+                  autoComplete="one-time-code"
                   autoFocus
                 />
               </div>
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -351,15 +371,19 @@ export const LoginScreen: React.FC = () => {
               <div>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label="6-digit verification code"
                   value={totpToken}
                   onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-gray-500 outline-none focus:border-[#6495ED] focus:ring-1 focus:ring-[#6495ED]"
                   placeholder="000000"
                   maxLength={6}
+                  autoComplete="one-time-code"
                   autoFocus
                 />
               </div>
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
