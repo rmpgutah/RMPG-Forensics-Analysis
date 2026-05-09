@@ -77,6 +77,10 @@ export const LoginScreen: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) return;
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
     setBusy(true);
     setError('');
     const result = await createUser(username.trim(), password);
@@ -219,7 +223,7 @@ export const LoginScreen: React.FC = () => {
                   minLength={8}
                 />
                 {password.length > 0 && password.length < 8 && (
-                  <p className="mt-1 text-xs text-yellow-400">Password must be at least 8 characters</p>
+                  <p role="alert" className="mt-1 text-xs text-yellow-400">Password must be at least 8 characters</p>
                 )}
               </div>
               {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
