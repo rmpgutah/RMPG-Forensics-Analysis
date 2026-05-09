@@ -236,7 +236,7 @@ export const PythonToolkit: React.FC = () => {
           </div>
 
           {/* Progress */}
-          <ProgressIndicator process={process} />
+          <ProgressIndicator percent={process.progress.percent} message={process.progress.message} isRunning={process.isRunning} />
         </div>
       )}
 
