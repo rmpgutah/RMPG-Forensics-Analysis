@@ -30,9 +30,9 @@ A curated list of 50 GitHub repositories that improve software quality, covering
 
 ## Security & Vulnerability Scanning
 
-19. **[OWASP/ZAP](https://github.com/zaproxy/zaproxy)** – Web application security scanner
+19. **[zaproxy/zaproxy](https://github.com/zaproxy/zaproxy)** – OWASP Zed Attack Proxy (ZAP) web security scanner
 20. **[aquasecurity/trivy](https://github.com/aquasecurity/trivy)** – Vulnerability scanner for containers & code
-21. **[zaproxy/zaproxy](https://github.com/zaproxy/zaproxy)** – OWASP Zed Attack Proxy
+21. **[snyk/cli](https://github.com/snyk/cli)** – Developer-first security testing CLI
 22. **[trufflesecurity/trufflehog](https://github.com/trufflesecurity/trufflehog)** – Find leaked credentials in code
 23. **[returntocorp/semgrep](https://github.com/returntocorp/semgrep)** – Lightweight static analysis for security
 24. **[github/codeql](https://github.com/github/codeql)** – Semantic code analysis engine
