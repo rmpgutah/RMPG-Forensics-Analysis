@@ -640,7 +640,7 @@ export const IosQuickExtract: React.FC = () => {
                 {res?.status === 'running' && (
                   <div className="w-full mt-0.5">
                     <div className="h-0.5 w-full rounded-full bg-[var(--border-color)] overflow-hidden">
-                      {(res.percent ?? 0) > 0 ? (
+                      {Number.isFinite(res.percent) && res.percent! > 0 ? (
                         <div
                           className="h-full rounded-full bg-[#6495ED] transition-all duration-300"
                           style={{ width: `${res.percent}%` }}
@@ -649,7 +649,7 @@ export const IosQuickExtract: React.FC = () => {
                         <div className="h-full w-1/3 rounded-full bg-[#6495ED] animate-pulse" />
                       )}
                     </div>
-                    {(res.percent ?? 0) > 0 && (
+                    {Number.isFinite(res.percent) && res.percent! > 0 && (
                       <span className="text-[9px] text-[#6495ED]">{res.percent?.toFixed(0)}%</span>
                     )}
                   </div>

@@ -50,7 +50,8 @@ export const AppLayout: React.FC = () => {
       setDownloadPercent(0);
     });
     const cleanupProgress = window.api.on('update:download-progress', (data: Record<string, unknown>) => {
-      setDownloadPercent(Number(data.percent ?? 0));
+      const p = Number(data.percent ?? 0);
+      setDownloadPercent(Number.isFinite(p) ? p : 0);
     });
     const cleanupDownloaded = window.api.on('update:downloaded', (data: Record<string, unknown>) => {
       setUpdateVersion(String(data.version ?? ''));
