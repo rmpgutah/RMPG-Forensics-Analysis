@@ -2,7 +2,7 @@ export const APP_NAME = 'RMPG Forensics Analysis';
 // Version is injected by Vite (define plugin) from desktop/package.json at build time.
 // Falls back to a literal for unit-test environments where the define is absent.
 export const APP_VERSION: string =
-  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.43';
+  typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.52';
 export const APP_AUTHOR = 'RMPG';
 
 export const IPC_CHANNELS = {
