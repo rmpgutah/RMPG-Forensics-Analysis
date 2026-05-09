@@ -423,13 +423,13 @@ export const IosFileExtraction: React.FC = () => {
               Extracting files...
             </span>
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {progress.filesExtracted} / {progress.totalFiles} files ({Math.round(progress.percent)}%)
+              {progress.filesExtracted} / {progress.totalFiles} files ({Math.round(Number.isFinite(progress.percent) ? progress.percent : 0)}%)
             </span>
           </div>
           <div className="w-full rounded-full h-2" style={{ backgroundColor: 'var(--bg-secondary)' }}>
             <div
               className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${progress.percent}%` }}
+              style={{ width: `${Number.isFinite(progress.percent) ? progress.percent : 0}%` }}
             />
           </div>
           <div className="mt-2 text-xs truncate" style={{ color: 'var(--text-muted)' }}>

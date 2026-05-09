@@ -145,6 +145,7 @@ export const PythonToolkit: React.FC = () => {
           const status = toolStatuses[tool.id];
           const isInstalled = status?.installed;
           const isSelected = selectedTool === tool.id;
+          const statusLoaded = Object.keys(toolStatuses).length > 0;
 
           return (
             <button
@@ -167,7 +168,9 @@ export const PythonToolkit: React.FC = () => {
                   <p className="mt-1 text-xs text-gray-400">{tool.description}</p>
                 </div>
                 <div className="ml-2 shrink-0">
-                  {isInstalled ? (
+                  {loadingStatus && !statusLoaded ? (
+                    <RefreshCw size={14} className="animate-spin text-gray-500" />
+                  ) : isInstalled ? (
                     <CheckCircle size={14} className="text-green-400" />
                   ) : (
                     <XCircle size={14} className="text-gray-500" />
@@ -190,7 +193,7 @@ export const PythonToolkit: React.FC = () => {
               <h3 className="text-lg font-bold text-white">{selectedToolDef.name}</h3>
               <p className="text-sm text-gray-400">{selectedToolDef.description}</p>
             </div>
-            {!toolStatuses[selectedTool]?.installed && (
+            {!loadingStatus && !toolStatuses[selectedTool]?.installed && (
               <button
                 onClick={() => handleInstall(selectedTool)}
                 disabled={installing === selectedTool}
@@ -227,7 +230,7 @@ export const PythonToolkit: React.FC = () => {
               <Play size={14} />
               {process.isRunning ? 'Running...' : `Run ${selectedToolDef.name}`}
             </button>
-            {!toolStatuses[selectedTool]?.installed && (
+            {!loadingStatus && !toolStatuses[selectedTool]?.installed && (
               <span className="flex items-center gap-1 text-xs text-yellow-400">
                 <AlertTriangle size={12} />
                 Tool not installed — click Install first
